@@ -1,5 +1,10 @@
 # MANTRA REMOTE
 
+>>> **START HERE IN ANY NEW SESSION: [](FEATURE_REQUEST.md)**
+>>> That file is the project brain — feature menu, design language, open decisions.
+>>> This README is only the Tailscale/VNC plumbing.
+
+
 **Control my Mac from my Nothing Phone 2a, from anywhere, over 2 Mbit/s.**
 
 Private. No open ports. No public IP needed. No DDNS needed.
