@@ -1,6 +1,6 @@
 # MANTRA REMOTE
 
->>> **START HERE IN ANY NEW SESSION: [](FEATURE_REQUEST.md)**
+>>> **START HERE IN ANY NEW SESSION: [FEATURE_REQUEST.md](FEATURE_REQUEST.md)**
 >>> That file is the project brain — feature menu, design language, open decisions.
 >>> This README is only the Tailscale/VNC plumbing.
 
