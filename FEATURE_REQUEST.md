@@ -135,7 +135,45 @@ every 10 seconds is one line of code in VNC and impossible in RustDesk.
 Keep RustDesk installed as the **fallback for when you need real speed** on a
 good connection. Two tools, two jobs. Don't force one to be both.
 
-- [ ] **DECIDE: D1 =** ______
+- [x] **DECIDED 2026-08-15: D1 = VNC (RFB).** Confirmed by Marko.
+
+#### Consequences of D1 — read before building Phase C
+
+**The good news: the pull model is in the RFB spec itself.**
+The client sends `FramebufferUpdateRequest`, the server answers with one
+`FramebufferUpdate`. Nothing arrives that was not asked for. So:
+
+- **F13 (frame-rate dropdown)** = a timer controlling how often we send that
+  request. 0.1 FPS is a 10-second timer. No hacks, no fighting the protocol.
+- **F14 (NO VIDEO)** = stop sending requests entirely. Socket stays open,
+  input events still flow. Costs bytes per keystroke and nothing else.
+- **F15 (SNAP)** = send exactly one request. This is the protocol's native
+  verb, not a trick we invented.
+- **F18 (region of interest)** = `FramebufferUpdateRequest` already carries
+  x / y / width / height. Ask only for the rectangle around the OBS record
+  button. **This is a spec feature we get for free.**
+- **F16 (8-bit colour)** = `SetPixelFormat` with BGR233. Client-side request,
+  honoured by every server.
+
+Every headline feature in Phase C is a first-class RFB concept. This is the
+right protocol for this app.
+
+**The catch: Apple's built-in server does not speak Tight/JPEG.**
+macOS Screen Sharing supports Raw, CopyRect, RRE, Hextile, Zlib, ZRLE and
+Apple's own ARD encoding — but not Tight, which is the encoding that carries
+lossy JPEG. ZRLE is zlib-based and lossless.
+
+Why this matters less than it sounds: lossless RLE compression is excellent on
+flat blocks of colour and poor on photographs. The whole bandwidth discipline
+in `docs/BANDWIDTH.md` — solid-colour wallpaper, reduce transparency, reduce
+motion, 8-bit colour — turns the screen into exactly the flat blocks that ZRLE
+compresses beautifully.
+
+So **ZRLE + BGR233 on a flat desktop is close to optimal anyway.** JPEG only
+wins on photographic content, which we are already engineering away.
+
+This does mean **F17 (JPEG quality slider) is not buildable against Apple's
+server.** Parked until D4 is answered.
 
 ### D2 — Where does the "brain" live?
 
@@ -165,6 +203,22 @@ localhost with the amber terminal skin could be testable this week. Port to a
 real APK once the feature set has stopped moving.
 
 - [ ] **DECIDE: D3 =** ______
+
+### D4 — Which VNC server on the Mac? *(new, opened by D1)*
+
+- **(a) Apple built-in Screen Sharing.** Zero install, already enabled by
+  `mantra-mac-setup.sh`, survives macOS updates, works at the login window.
+  No JPEG. **Recommended to start.**
+- **(b) RealVNC Server.** Has Tight/JPEG and adaptive quality. Proprietary,
+  limited free tier, another moving part to maintain from the jungle.
+- **(c) Old open-source Mac servers (Vine / OSXvnc).** Abandoned years ago,
+  will not run cleanly on modern Apple Silicon. Do not.
+
+**Recommendation: (a).** Build the whole app against the built-in server. If
+real testing shows ZRLE is the bottleneck — and it may well not be — revisit
+using actual byte measurements from F12 rather than guesses.
+
+- [ ] **DECIDE: D4 =** ______
 
 ---
 
@@ -203,7 +257,7 @@ real APK once the feature set has stopped moving.
 | **F14** | **NO VIDEO mode.** Screen stays dark/blank. Input still works — you can type and click blind. Byte cost approximately zero. | Better name than "no images", as Marko said. Sounds deliberate, because it is. |
 | **F15** | **SNAP button.** In NO VIDEO mode, request exactly **one** frame. Costs one JPEG, maybe 40 KB. | The killer feature. 95% of remote work is: look once, click twice, look once. This is a whole session for ~100 KB. |
 | **F16** | **Colour depth selector.** `8-BIT (64c) / 16-BIT / FULL`. Default 8-bit. | 3–4× saving. Ugly and correct. |
-| **F17** | **JPEG quality slider.** 1–9, default 4, with a live estimate of KB per frame. | |
+| **F17** | `PARK` **JPEG quality slider.** 1–9, default 4, live KB/frame estimate. | Blocked: Apple's server has no Tight/JPEG. Unblocks only if D4 = RealVNC. |
 | **F18** | **Region of interest.** Drag a rectangle; only that part of the screen updates. The rest freezes. | Watching *only* the OBS record button costs almost nothing. This may be the single biggest saving in the whole app. |
 | **F19** | **Auto-throttle.** If measured throughput drops below a threshold, step the FPS down automatically and say so in the status strip. | |
 | **F20** | **Freeze / thaw.** One tap suspends all frame requests without dropping the session. Resume instantly. | For when you put the phone in your pocket mid-session. |
@@ -329,3 +383,4 @@ strand you. Earn it.
 | Date | Change |
 |---|---|
 | 2026-08-15 | Document created. Features F01–F38 drafted. Decisions D1–D3 open. |
+| 2026-08-15 | **D1 = VNC**, decided by Marko. Consequences written up. D4 opened (which VNC server). F17 parked. |
