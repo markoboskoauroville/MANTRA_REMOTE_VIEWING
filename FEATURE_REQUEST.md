@@ -189,7 +189,9 @@ recording?"). Two options:
 already reachable. Move to (b) only when SSH round-trips become the bottleneck
 — which for this app is probably never.
 
-- [ ] **DECIDE: D2 =** ______
+- [x] **DECIDED 2026-08-15: D2 = SSH only, no agent.** Nothing to install on
+  the Mac, nothing to keep alive, nothing that can crash while Marko is in
+  another country. Every question is a shell command over Tailscale SSH.
 
 ### D3 — How is the client built?
 
@@ -202,7 +204,17 @@ lives in Termux and ships web UIs fast (AGY UI, MA Reader Web). A Flask app on
 localhost with the amber terminal skin could be testable this week. Port to a
 real APK once the feature set has stopped moving.
 
-- [ ] **DECIDE: D3 =** ______
+- [x] **DECIDED 2026-08-15: D3 = Native Android (Kotlin).**
+
+  *Note: this overrides the earlier recommendation of a Termux web prototype,
+  and it is the better call for two reasons that only became clear after D1.*
+
+  1. Marko already ships Android apps continuously (TTT, TA-TA Talk, Key
+     Tester). The build pipeline the prototype was meant to avoid already
+     exists and is warm.
+  2. **We have to write our own RFB client anyway** (see STACK below). Once
+     that is true, the prototype saves almost nothing — the hard part is the
+     protocol, not the platform. Better to write it once, in the final home.
 
 ### D4 — Which VNC server on the Mac? *(new, opened by D1)*
 
@@ -218,7 +230,95 @@ real APK once the feature set has stopped moving.
 real testing shows ZRLE is the bottleneck — and it may well not be — revisit
 using actual byte measurements from F12 rather than guesses.
 
-- [ ] **DECIDE: D4 =** ______
+- [x] **DECIDED 2026-08-15: D4 = Apple built-in Screen Sharing.** Zero install,
+  already enabled by `mac/mantra-mac-setup.sh`, survives macOS updates.
+  Revisit only with real byte measurements from F12.
+
+
+---
+
+## PART 2B — THE STACK (locked by D1–D4)
+
+### The RFB client: we write it ourselves
+
+**This is the central engineering decision and it follows directly from D1.**
+
+Off-the-shelf VNC libraries (libvncclient, and everything built on it including
+bVNC) manage the update loop *for you*. They request frames automatically, as
+fast as they can, because that is what every other VNC client wants.
+
+**Our entire product is deciding exactly when a frame is requested, and for
+which rectangle.** A library that hides `FramebufferUpdateRequest` hides the
+one thing we are building. So we implement RFB directly in Kotlin.
+
+Good news: RFB is a small, old, stable, well-documented protocol. We need a
+fraction of it.
+
+**Minimum viable RFB — implement in this order:**
+
+| Piece | Notes |
+|---|---|
+| Version handshake | Trivial. `RFB 003.008` |
+| Security type 2 (VNC auth) | DES challenge-response. ~40 lines. See auth note below |
+| `ClientInit` / `ServerInit` | Gets screen size and pixel format |
+| `SetPixelFormat` | This is **F16**. BGR233 for 8-bit |
+| `SetEncodings` | Declare what we can decode |
+| `FramebufferUpdateRequest` | **The heart of the app.** F13, F14, F15, F18 |
+| `KeyEvent` / `PointerEvent` | Phase D input |
+| Decoder: **Raw** | Mandatory fallback. Easiest |
+| Decoder: **CopyRect** | Nearly free, huge win on window drags |
+| Decoder: **Zlib** | Inflate, then raw pixels. **Start here** — much simpler than ZRLE |
+| Decoder: **ZRLE** | Better compression, more work (64×64 tiles, palettes, RLE). Add after the app works |
+| Decoder: Hextile | Optional fallback |
+
+Skip RRE, CoRRE, and all Apple ARD-specific encodings.
+
+### Authentication — the one real trap
+
+macOS Screen Sharing defaults to **Apple's security type 30** (Diffie-Hellman
+against your macOS account password). Implementing that in Kotlin is genuinely
+unpleasant.
+
+**Escape hatch:** on the Mac, System Settings → General → Sharing → Screen
+Sharing → *Computer Settings…* → tick **"VNC viewers may control screen with
+password"** and set one. That enables **standard RFB security type 2**, which
+is a simple DES challenge-response we can implement in an afternoon.
+
+Caveats, both acceptable here:
+- The legacy VNC password is limited to 8 characters and the scheme is weak.
+- **It is only reachable over the tailnet.** Nothing on the public internet can
+  see port 5900. The weak password is defence-in-depth, not the front door.
+- Use a password that is *not* your Mac login password.
+
+This should be folded into **F04** and added to `mac/mantra-mac-setup.sh`.
+
+### Libraries
+
+| Need | Choice | Why |
+|---|---|---|
+| Language | Kotlin | D3 |
+| Min SDK | 34 (Android 14) | Nothing Phone 2a. No legacy baggage |
+| UI | Jetpack Compose | The amber TUI look is easy with custom Canvas + Text |
+| SSH | **sshj** | Maintained, modern crypto, Ed25519. (Original JSch is abandoned; if it must be JSch, use the `mwiede/jsch` fork) |
+| RFB | **our own** | See above |
+| Byte metering | `TrafficStats.getUidRxBytes()` / `getUidTxBytes()` | Per-app UID, built into Android, free |
+| Persistence | DataStore | Budget ledger, reset date, profile |
+| Fonts | IBM Plex Mono, bundled | Period-honest, and IBM is the whole logo concept |
+| Transport | none — the Tailscale app provides it | We just dial `100.x.x.x`. No SDK, no VPN permission needed in our app |
+
+### What the Mac side needs (D2 = SSH only)
+
+No agent. `mac/mantra-mac-setup.sh` gains:
+
+- enable the legacy VNC password (auth escape hatch above)
+- confirm Tailscale SSH is on
+- install `obs-cli` for Phase E
+- a `~/.mantra/` folder holding small shell scripts the phone calls by name,
+  so the phone sends `mantra status` rather than a long shell one-liner
+
+That last point matters: **the phone should send short verbs, not commands.**
+Fewer bytes, and the Mac side can be fixed by editing a script instead of
+rebuilding the APK.
 
 ---
 
@@ -384,3 +484,4 @@ strand you. Earn it.
 |---|---|
 | 2026-08-15 | Document created. Features F01–F38 drafted. Decisions D1–D3 open. |
 | 2026-08-15 | **D1 = VNC**, decided by Marko. Consequences written up. D4 opened (which VNC server). F17 parked. |
+| 2026-08-15 | **D2 = SSH only. D3 = Native Android/Kotlin. D4 = Apple built-in.** All decisions closed. STACK section added. Ready to build F01. |
