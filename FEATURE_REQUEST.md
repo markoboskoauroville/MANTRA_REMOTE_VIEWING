@@ -61,6 +61,8 @@ Never more than these. No gradients. No blur. No drop shadows.
   period-honest — IBM's own).
 - Sizes on a strict scale: 11 / 13 / 16 / 22 / 34. Nothing between.
 - Generous line-height (1.6). Marko reads better with air.
+- **Minimum body size 16px, preferred 22px.** Eye strain is a stated hard
+  constraint on this project, not a preference. When in doubt, bigger.
 - **Never** thin weights. Regular and Bold only.
 
 ### Layout
@@ -234,6 +236,47 @@ using actual byte measurements from F12 rather than guesses.
   already enabled by `mac/mantra-mac-setup.sh`, survives macOS updates.
   Revisit only with real byte measurements from F12.
 
+### D5 — Big-screen access: which route? *(new, opened by Phase G)*
+
+- **(a) Fork scrcpy to work without ADB.** **Not possible.** See Phase G.
+- **(b) Fix scrcpy properly** — diagnose why it fails on the Nova TV machine.
+  Cheap to test, and if it works it costs nothing to maintain.
+- **(c) Funnel + noVNC (F39–F41).** Browser only. Works on *any* borrowed
+  machine anywhere in the world, not just the one at work. **Recommended.**
+
+**Recommendation: run the (b) diagnostic first because it takes five minutes,
+then build (c) regardless.** They solve different problems: (b) shows the
+phone on one specific PC; (c) shows the *Mac* on every PC, forever.
+
+- [ ] **DECIDE: D5 =** ______
+
+### DIAGNOSTIC: why does scrcpy fail at Nova TV?
+
+Run in this order. The answer changes the plan.
+
+1. On the phone: Settings → About → tap Build number 7× → back → System →
+   Developer options → **USB debugging ON**.
+   *(This is the single most common cause. scrcpy cannot work without it.)*
+2. On the PC: download the **scrcpy win64 zip** and just unzip it to the
+   Desktop. **There is nothing to install** — `adb.exe` is inside the zip.
+   If the belief was that ADB must be installed, that was the misunderstanding.
+3. Open `cmd` in that folder and run `adb devices`. Read the result:
+
+| Result | Meaning | Fix |
+|---|---|---|
+| device listed | Working | Just run `scrcpy.exe` |
+| `unauthorized` | Phone has not trusted the PC | Unlock phone, accept the dialog |
+| empty list | **USB driver missing** — needs admin | Blocked. Go to (c) |
+| `adb.exe` blocked / won't run | AppLocker or Defender policy | Blocked. Go to (c) |
+| phone not in Device Manager at all | USB device-class policy allows MTP only | Blocked. Go to (c) |
+
+4. If it works, useful flags for tired eyes and rotation:
+   `scrcpy.exe --capture-orientation=90 --stay-awake --window-title="MANTRA"`
+   (scrcpy 3.0+ replaced `--lock-video-orientation` with
+   `--capture-orientation`, and added `--angle` for arbitrary rotation.)
+
+Record the outcome here: ______
+
 
 ---
 
@@ -385,6 +428,68 @@ rebuilding the APK.
 | **F30** | **Zoom control.** Join a meeting from a pasted link, mute/unmute, leave — via AppleScript over SSH. | |
 | **F31** | **Watchdog.** Background check every N minutes while recording. Notify the phone if OBS dies, disk fills, or the recording stops unexpectedly. | Very cheap, very high value. This is what lets you stop watching. |
 
+### PHASE G — THE BIG SCREEN
+*Marko's eyes hurt on a 6.7" screen. This is a hard accessibility requirement,
+not a nice-to-have. Any borrowed monitor should become a window onto the Mac.*
+
+#### The scrcpy question, answered
+
+**A fork of scrcpy cannot avoid ADB. This is architectural, not a bug.**
+
+scrcpy works by using adb to push `scrcpy-server.jar` into `/data/local/tmp`
+and running it as the **shell user**. The privileged screen capture it performs
+is granted *by ADB's shell UID*. A normal Android app does not have it.
+
+Without ADB, an app can only capture via `MediaProjection` (consent dialog
+every time), and it can only get that stream off the device through a
+**network socket**. USB file transfer is MTP — a file-browsing protocol with
+no mechanism for a live stream. You cannot open a socket over MTP.
+
+So "send the picture over the USB cable without ADB" is not a thing that can
+be built. Not by us, not by anyone. Close that door.
+
+#### The reframe that solves it
+
+**Marko does not need to see his phone. He needs a big view of his Mac.**
+
+At a corporate workstation there is already a big monitor, a browser and an
+internet connection. The phone is a detour. Cut it out:
+
+```
+  Corporate browser  ──HTTPS/443──>  Tailscale Funnel  ──>  noVNC  ──>  Mac :5900
+        (no install, no admin, no USB, no ADB)
+```
+
+| # | Feature | Notes |
+|---|---|---|
+| **F39** | **noVNC on the Mac.** `websockify` + noVNC in front of port 5900. Gives a browser-based VNC client at full monitor size. | Pure web. Nothing to install on the borrowed machine. |
+| **F40** | **Tailscale Funnel + auth.** `tailscale funnel` publishes it on `https://mantra-mac.<tailnet>.ts.net` — reachable from *any* browser, on 443, which corporate firewalls allow. Caddy in front with **basic auth**. | See the warning below. Auth is mandatory, not optional. |
+| **F41** | **Funnel kill switch, from the phone.** One button in Mantra Remote: `FUNNEL ON` / `FUNNEL OFF` over SSH. Default OFF. Auto-off after N hours. | This is what makes F40 acceptable. Public only while Marko is actually sitting at the borrowed machine. |
+| **F42** | **Rotation control in the browser view.** Manual 0/90/180/270 button. CSS transform, costs nothing. | Marko holds the phone portrait but the Mac is landscape — the mismatch he described. |
+| **F43** | **BIG mode.** A layout profile with minimum 22px type, maximum contrast, no thin weights, generous spacing. Toggle in the phone app *and* the browser view. | Amber-on-black is already a good high-contrast, low-blue-light choice for tired eyes. Lean into it. |
+| **F44** | `PARK` **Phone screen broadcast.** MediaProjection → MJPEG over HTTP, published through Funnel, viewed in a browser. | Only if a phone-only app genuinely needs to be seen. Tailscale on Android does not expose Funnel controls, so this is harder than it looks. Do not start here. |
+
+#### Security warning on F40 — read it
+
+Funnel makes a service **publicly reachable on the internet**. This is a real
+departure from the "nothing is public" posture in `docs/SECURITY.md`, and it
+must be handled deliberately:
+
+- **Basic auth in front, always.** A long password, not the 8-character VNC one.
+- **Default OFF.** F41 exists precisely so the door is shut by default.
+- Funnel URLs are guessable-ish and get scanned. Assume it will be found.
+- If it is ever left on and unauthenticated, someone has your Mac.
+
+Build **F41 before F40 ships.** Same rule as F38 before F37.
+
+#### One practical note
+
+Running personal remote-access tooling on a Nova TV workstation may sit
+outside their acceptable-use policy, and corporate networks often do TLS
+inspection that will see it. Worth knowing where the line is before relying
+on it daily.
+
+
 ### PHASE F — THE MACHINE THAT BUILDS ITSELF
 *The real vision. See Part 4 before building any of this.*
 
@@ -485,3 +590,4 @@ strand you. Earn it.
 | 2026-08-15 | Document created. Features F01–F38 drafted. Decisions D1–D3 open. |
 | 2026-08-15 | **D1 = VNC**, decided by Marko. Consequences written up. D4 opened (which VNC server). F17 parked. |
 | 2026-08-15 | **D2 = SSH only. D3 = Native Android/Kotlin. D4 = Apple built-in.** All decisions closed. STACK section added. Ready to build F01. |
+| 2026-08-15 | **Phase G — THE BIG SCREEN** added (F39–F44). scrcpy-without-ADB ruled out as architecturally impossible. D5 opened + scrcpy diagnostic. Eye strain recorded as a hard design constraint. |
