@@ -241,11 +241,13 @@ using actual byte measurements from F12 rather than guesses.
 - **(a) Fork scrcpy to work without ADB.** **Not possible.** See Phase G.
 - **(b) Fix scrcpy properly** — diagnose why it fails on the Nova TV machine.
   Cheap to test, and if it works it costs nothing to maintain.
-- **(c) Funnel + noVNC (F39–F41).** Browser only. Works on *any* borrowed
-  machine anywhere in the world, not just the one at work. **Recommended.**
+- **(c) Funnel + noVNC (F39–F41).** Browser only. Works anywhere with
+  internet — hotels, cafes, airports. **Not at Nova TV: no internet there.**
+- **(d) USB tethering + MJPEG in the browser (F45–F48).** The Nova TV answer.
+  No internet, no install, no admin, no ADB. **Recommended for work.**
 
-**Recommendation: run the (b) diagnostic first because it takes five minutes,
-then build (c) regardless.** They solve different problems: (b) shows the
+**Recommendation: run the F45 tethering test first (60 seconds), then build
+(d) for work and (c) for travel.** They solve different problems: (b) shows the
 phone on one specific PC; (c) shows the *Mac* on every PC, forever.
 
 - [ ] **DECIDE: D5 =** ______
@@ -448,7 +450,96 @@ no mechanism for a live stream. You cannot open a socket over MTP.
 So "send the picture over the USB cable without ADB" is not a thing that can
 be built. Not by us, not by anyone. Close that door.
 
-#### The reframe that solves it
+#### CONSTRAINT UPDATE 2026-08-15 — the Nova TV edit stations have NO INTERNET
+
+Internet is disabled on the editing workstations by policy. This kills F39–F41
+**for Nova TV specifically**. They remain valid for hotels, cafes, airports and
+anywhere else with a browser and a connection — see their entry below.
+
+For Nova TV, the constraints are now:
+
+| Constraint | Consequence |
+|---|---|
+| No internet | Nothing cloud-based. Nothing through Tailscale |
+| No software may be installed | **This is the binding constraint.** Not video quality |
+| No admin rights | No drivers, no MSI, possibly no unsigned `.exe` |
+| USB works for file transfer | So the physical port is open and enumerating |
+| ADB blocked / unavailable | scrcpy is out (see above) |
+
+#### On SRT and NDI — right instinct, wrong layer
+
+Both are **transport** protocols. They move video *across a network that
+already exists*. Neither one creates connectivity. With no network path
+between the phone and the workstation, both are irrelevant — they are the
+cargo, not the road.
+
+And on the licensing question directly:
+
+- **SRT** — genuinely open source, MPL-2.0, from Haivision. Good protocol.
+- **NDI** — **not** open source. Proprietary to Vizrt NDI AB, royalty-free SDK
+  under a license agreement, trademark requirements attached. Also designed for
+  gigabit LAN; it is deliberately bandwidth-hungry.
+
+But the disqualifier for both is the same and it is fatal:
+**they need a receiver application installed on the PC.** VLC, OBS, NDI Studio
+Monitor. Installing software is exactly the thing that is blocked.
+
+**The only receiver already installed on that workstation is the web browser.**
+Everything below follows from that single fact.
+
+#### The road: USB tethering makes a network where there was none
+
+Android's **USB tethering** turns the phone into a USB Ethernet device (RNDIS).
+Windows 10/11 carry that class driver in-box, so it usually appears without an
+install prompt. The PC gets an IP, the phone gets `192.168.42.129`, and there
+is now a real IP link — **with no internet on it, which is fine, because we
+only need phone-to-PC.**
+
+Critically: USB tethering is a normal user toggle. **No ADB. No developer
+options. No admin. No install.**
+
+```
+  Phone (MediaProjection -> JPEG -> HTTP server)
+        |
+        |  USB cable, RNDIS, ~480 Mbit/s, no internet
+        v
+  Workstation browser  ->  http://192.168.42.129:8080
+        |
+        v
+  Big monitor. Eyes happy.
+```
+
+Note the reversal from the rest of this project: **bandwidth here is enormous
+and free.** No frugality needed. Send big, sharp, high quality frames.
+
+| # | Feature | Notes |
+|---|---|---|
+| **F45** | **USB tether link check.** Document and test the RNDIS path. Phone: Hotspot & tethering → USB tethering ON. PC: `ipconfig` shows a new adapter. | 60-second test, installs nothing. **Do this first.** |
+| **F46** | **MJPEG broadcast mode in Mantra Remote.** MediaProjection → ImageReader → JPEG → `multipart/x-mixed-replace` over a tiny embedded HTTP server. An `<img>` tag renders it natively in any browser. | Dead simple, no JS, no codec, no install. Ship this first. |
+| **F47** | **Zero-install landing page.** The phone serves one HTML page: the image, a rotation button, a size selector, BIG mode. Amber on black. | The entire PC-side "app" is a URL. Nothing to install, nothing to leave behind. |
+| **F48** | **Rotation button.** CSS `transform: rotate(90deg)` in the served page. Portrait phone, landscape monitor — the mismatch Marko described, fixed in one line. | Also add fit-to-width / fit-to-height / 1:1. |
+| **F49** | `LATER` **WebRTC broadcast.** Smooth H.264 instead of JPEG frames. Signalling over the same local HTTP server, host ICE candidates only, no STUN/TURN needed on a direct link. | Better, but browsers gate parts of WebRTC behind secure contexts and self-signed HTTPS means cert warnings. MJPEG has none of these problems. Only build if F46 proves too choppy. |
+| **F50** | `LATER` **Input back to the phone.** Type on the workstation keyboard, characters go to the phone. A WebSocket to the phone app plus an InputMethod or Accessibility service. | Marko said picture is the minimum and typing is a bonus. Correct priority. Do not let this delay F46. |
+
+**Note the deliberate choice:** MJPEG beats SRT, NDI, and WebRTC here **not
+because it is technically better, but because it is the only one whose
+receiver is already installed.** On a locked machine that beats every quality
+argument.
+
+#### If USB tethering is also blocked
+
+Fallback: the phone writes a JPEG to shared storage every N seconds; the PC
+watches the folder over MTP and displays it. Roughly 0.5–1 fps, laggy, and MTP
+caching makes new files appear unreliably. It also still needs *something* to
+render on the PC.
+
+It is genuinely bad. But at ~1 fps it is arguably enough to read a big
+transcript while dictating — which is exactly the frugal philosophy of the
+rest of this project. Keep in the back pocket. Do not build until F45 fails.
+
+#### The internet-available variant (hotels, cafes, airports)
+
+**Where there IS internet, this remains the best answer:**
 
 **Marko does not need to see his phone. He needs a big view of his Mac.**
 
@@ -591,3 +682,4 @@ strand you. Earn it.
 | 2026-08-15 | **D1 = VNC**, decided by Marko. Consequences written up. D4 opened (which VNC server). F17 parked. |
 | 2026-08-15 | **D2 = SSH only. D3 = Native Android/Kotlin. D4 = Apple built-in.** All decisions closed. STACK section added. Ready to build F01. |
 | 2026-08-15 | **Phase G — THE BIG SCREEN** added (F39–F44). scrcpy-without-ADB ruled out as architecturally impossible. D5 opened + scrcpy diagnostic. Eye strain recorded as a hard design constraint. |
+| 2026-08-15 | **No internet at Nova TV edit stations.** F39–F41 rescoped to travel only. SRT/NDI assessed and ruled out (wrong layer + need an installed receiver; NDI also proprietary). **F45–F50 added: USB tethering + MJPEG to the browser.** Binding constraint recorded as *no software may be installed*, not bandwidth. |
