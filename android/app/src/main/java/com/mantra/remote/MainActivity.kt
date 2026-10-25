@@ -126,6 +126,7 @@ private class Session : Rfb.Listener {
     var lastMs by mutableLongStateOf(0L)
     var rfb: Rfb? = null
     var full by mutableStateOf(false)
+    var loginPassword = ""
     var landscape by mutableStateOf(false)
 
     override fun onConnected(name: String, width: Int, height: Int) {
@@ -143,7 +144,7 @@ private class Session : Rfb.Listener {
 
 @Composable
 private fun App(prefs: android.content.SharedPreferences) {
-    val session = remember { Session() }
+    val session = remember { Session().also { it.loginPassword = prefs.getString("login", "") ?: "" } }
     Box(
         Modifier
             .fillMaxSize()
@@ -204,6 +205,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
     var host by remember { mutableStateOf(prefs.getString("host", "mantra-mac") ?: "mantra-mac") }
     var port by remember { mutableStateOf(prefs.getString("port", "5900") ?: "5900") }
     var password by remember { mutableStateOf(prefs.getString("password", "") ?: "") }
+    var login by remember { mutableStateOf(prefs.getString("login", "") ?: "") }
     Column(
         Modifier.fillMaxSize().imePadding().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -213,10 +215,12 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
         Field("HOST (TAILSCALE NAME OR 100.x.x.x)", host) { host = it.trim() }
         Field("PORT", port, number = true) { port = it.filter(Char::isDigit) }
         Field("VNC PASSWORD (SCREEN SHARING)", password, secret = true) { password = it }
+        Field("MAC LOGIN PASSWORD (THE LOGIN BUTTON TYPES IT)", login, secret = true) { login = it }
         Spacer(Modifier.height(12.dp))
         Key(if (s.phase == Phase.CONNECTING) "DIALLING …" else "CONNECT", Modifier.fillMaxWidth(), size = 22) {
             if (s.phase == Phase.CONNECTING) return@Key
-            prefs.edit().putString("host", host).putString("port", port).putString("password", password).apply()
+            prefs.edit().putString("host", host).putString("port", port).putString("password", password).putString("login", login).apply()
+            s.loginPassword = login
             s.phase = Phase.CONNECTING; s.status = "> DIAL $host:$port"; s.statusBad = false
             val rfb = Rfb(s); s.rfb = rfb
             rfb.connect(host, port.toIntOrNull() ?: 5900, password)
@@ -455,26 +459,32 @@ private fun Live(s: Session) {
             specialKeys.forEach { (label, k) -> Key(label, Modifier.width(60.dp), size = 18) { tapKey(k) } }
         }
     }
-    val typing: @Composable () -> Unit = {
-        if (keyboard) TypingField(onText = { text ->
-            text.forEach { ch ->
-                when (ch) {
-                    '\n' -> tapKey(K_RETURN)
-                    else -> withMods {
-                        val ks = if (ch.code < 256) ch.code else 0x01000000 + ch.code
-                        val shift = ch.isUpperCase() || ch in "~!@#$%^&*()_+{}|:\"<>?"
-                        if (shift) rfb.key(K_SHIFT, true)
-                        rfb.key(ks, true); rfb.key(ks, false)
-                        if (shift) rfb.key(K_SHIFT, false)
-                    }
-                }
+    fun typeText(text: String) = text.forEach { ch ->
+        when (ch) {
+            '\n' -> tapKey(K_RETURN)
+            else -> withMods {
+                val ks = if (ch.code < 256) ch.code else 0x01000000 + ch.code
+                val shift = ch.isUpperCase() || ch in "~!@#$%^&*()_+{}|:\"<>?"
+                if (shift) rfb.key(K_SHIFT, true)
+                rfb.key(ks, true); rfb.key(ks, false)
+                if (shift) rfb.key(K_SHIFT, false)
             }
-        }, onBackspace = { tapKey(K_BACKSPACE) })
+        }
+    }
+    // LOGIN: the Mac password from the settings, typed into whatever asks for it (lock screen, a dialog), then Return
+    fun login() {
+        if (s.loginPassword.isEmpty()) return
+        mods.value = emptySet()
+        typeText(s.loginPassword); tapKey(K_RETURN)
+    }
+    val typing: @Composable () -> Unit = {
+        if (keyboard) TypingField(onText = { typeText(it) }, onBackspace = { tapKey(K_BACKSPACE) })
     }
     val toggles: @Composable (Modifier) -> Unit = { modifier ->
         Key("⌨ KEYS", modifier, active = keyboard) { keyboard = !keyboard }
         Key("SCROLL", modifier, active = scrollMode) { scrollMode = !scrollMode }
         Key("${FPS[fpsIndex].first} FPS", modifier) { fpsIndex = (fpsIndex + 1) % FPS.size }
+        Key("LOGIN", modifier) { login() }
     }
     val views: @Composable (Modifier) -> Unit = { modifier ->
         Key(if (s.landscape) "▯ PORTRAIT" else "▭ LANDSCAPE", modifier) { s.landscape = !s.landscape }
@@ -483,19 +493,21 @@ private fun Live(s: Session) {
 
     when {
         s.full -> Box(Modifier.fillMaxSize().background(Color.Black).imePadding()) {
-            // the Mac's screen edge to edge; over it, half-transparent rectangles: exit, the two monitors, the keyboard
+            // the Mac's screen edge to edge; the actions are one line of faint words in the bottom right corner, like
+            // subtitles: the middle of the bottom edge is the Dock, the corner is the emptiest place on a Mac
             screen(Modifier.fillMaxSize())
-            Column(Modifier.align(Alignment.TopCenter).padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Overlay("✕ EXIT FULL") { s.full = false }
+            Column(Modifier.align(Alignment.BottomEnd).fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                    Overlay("EXIT") { s.full = false }
                     MONITORS.forEachIndexed { i, m -> Overlay("MON " + m.name.take(1), active = monitor == i) { monitor = i } }
-                    Overlay("⌨", active = keyboard) { keyboard = !keyboard }
+                    Overlay("KEYS", active = keyboard) { keyboard = !keyboard }
                     Overlay("SCROLL", active = scrollMode) { scrollMode = !scrollMode }
+                    Overlay("LOGIN") { login() }
                 }
-            }
-            if (keyboard) Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xB0000000))) {
-                keysRow()
-                typing()
+                if (keyboard) Column(Modifier.fillMaxWidth().background(Color(0xB0000000))) {
+                    keysRow()
+                    typing()
+                }
             }
         }
         s.landscape -> Row(Modifier.fillMaxSize().imePadding()) {
@@ -531,19 +543,19 @@ private fun Live(s: Session) {
     }
 }
 
-/** A half-transparent rectangle over the full-screen picture: big enough for a thumb, faint enough to see through. */
+/**
+ * An action over the full-screen picture, drawn like a subtitle (Marko, 25.10.2026): words only, no frame, no
+ * background, no shadow, half transparent. The touch area is a thumb's size; only the letters show.
+ */
 @Composable
 private fun Overlay(label: String, active: Boolean = false, onClick: () -> Unit) {
     val view = LocalView.current
     Box(
         Modifier
-            .height(48.dp)
-            .background(if (active) Amber.copy(alpha = 0.55f) else Color(0x88000000))
-            .border(1.dp, Amber.copy(alpha = 0.7f))
             .clickable { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() }
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
-    ) { T(label, if (active) Bg else Amber, 16, bold = true) }
+    ) { T(label, Amber.copy(alpha = if (active) 0.8f else 0.4f), 11, bold = active) }
 }
 
 /**
