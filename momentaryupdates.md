@@ -38,3 +38,4 @@ be made in the app (logged in as Marko), not with the VNC password.
 > panning and scanning image still not work. Please build this three-finger gesture,
 > I'm going now on Wi-Fi debugging. Please fix my application. We need to have a button which blocks all the clicks, only watching. It will be watching only, so I can zoom in and scroll, but I cannot click. I can zoom and scroll in the picture, not on the real Mac. So it will be a view-only button
 > Please swap the buttons on the full screen. What is on the left should go on the right side, and what is on the right should go on the left side.
+> Please update my remote control so it can work in the background. Right now, when it goes to the background and I bring it back up, I need to reconnect. When it's in the background, just put it to 0.2 frames automatically. When it's in the foreground, it should go back to whatever the user chooses.
