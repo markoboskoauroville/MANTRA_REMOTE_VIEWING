@@ -1,6 +1,14 @@
 package com.mantra.remote
 
 import android.content.Context
+import android.content.pm.ActivityInfo
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import android.net.TrafficStats
 import android.os.Bundle
 import android.os.Process
@@ -84,14 +92,14 @@ private val Rule = Color(0xFF2A2320)
 private val Mono = FontFamily.Monospace
 
 /**
- * The Mac's monitors in points, as macOS arranges them (CGDisplayBounds, 25.10.2026): the BenQ is the main display
- * at the origin, the MacBook Pro's own screen to its right. The VNC framebuffer covers them all; each monitor's
- * rectangle in it is this layout scaled to the framebuffer's size.
+ * The Mac's monitors as Apple's VNC server lays them out (measured 25.10.2026): one framebuffer of 5584x1964, the
+ * displays side by side in their own PIXELS, tops aligned. The BenQ (main, 2560x1440) on the left, the MacBook Pro's
+ * Retina screen (3024x1964 pixels, 1512x982 points) to its right.
  */
 private data class Monitor(val name: String, val x: Int, val y: Int, val w: Int, val h: Int)
 private val MONITORS = listOf(
     Monitor("1 BENQ", 0, 0, 2560, 1440),
-    Monitor("2 MACBOOK", 2560, 0, 1512, 982),
+    Monitor("2 MACBOOK", 2560, 0, 3024, 1964),
 )
 
 private const val PREFS = "remote"
@@ -117,8 +125,11 @@ private class Session : Rfb.Listener {
     var frames by mutableLongStateOf(0L)
     var lastMs by mutableLongStateOf(0L)
     var rfb: Rfb? = null
+    var full by mutableStateOf(false)
+    var landscape by mutableStateOf(false)
 
     override fun onConnected(name: String, width: Int, height: Int) {
+        android.util.Log.i("MantraRemote", "framebuffer ${width}x$height name '$name'")
         if (name.isNotEmpty()) this.name = name
         fbW = width; fbH = height
         phase = Phase.LIVE; status = "LINK ESTABLISHED"; statusBad = false
@@ -137,7 +148,7 @@ private fun App(prefs: android.content.SharedPreferences) {
         Modifier
             .fillMaxSize()
             .background(Bg)
-            .safeDrawingPadding()
+            .then(if (session.full) Modifier else Modifier.safeDrawingPadding())
     ) {
         when (session.phase) {
             Phase.SETUP, Phase.CONNECTING -> Setup(prefs, session)
@@ -218,18 +229,13 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
     }
 }
 
-/** Framebuffer rectangle of a monitor: the point layout scaled to the framebuffer. */
+/** Framebuffer rectangle of a monitor. A framebuffer of another size (other displays attached) is shown whole. */
 private fun monitorRect(i: Int, fbW: Int, fbH: Int): IntArray {
-    val totalW = MONITORS.maxOf { it.x + it.w }.toFloat()
-    val totalH = MONITORS.maxOf { it.y + it.h }.toFloat()
-    // A framebuffer that is only as wide as one monitor holds only that one: show all of it.
-    if (fbW < totalW * 0.8f * (fbH / totalH)) return intArrayOf(0, 0, fbW, fbH)
-    val sx = fbW / totalW; val sy = fbH / totalH
+    val totalW = MONITORS.maxOf { it.x + it.w }
+    val totalH = MONITORS.maxOf { it.y + it.h }
+    if (fbW != totalW || fbH != totalH) return intArrayOf(0, 0, fbW, fbH)
     val m = MONITORS[i]
-    return intArrayOf(
-        (m.x * sx).roundToInt(), (m.y * sy).roundToInt(),
-        (m.w * sx).roundToInt().coerceAtMost(fbW), (m.h * sy).roundToInt().coerceAtMost(fbH),
-    )
+    return intArrayOf(m.x, m.y, m.w, m.h)
 }
 
 private val FPS = listOf("0.5" to 2000L, "1" to 1000L, "2" to 500L, "5" to 200L, "10" to 100L, "MAX" to 0L)
@@ -307,131 +313,149 @@ private fun Live(s: Session) {
     }
     fun tapKey(k: Int) = withMods { rfb.key(k, true); rfb.key(k, false) }
 
-    Column(Modifier.fillMaxSize().imePadding()) {
-        // ── header: the two monitors, the link
-        Row(Modifier.fillMaxWidth().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            MONITORS.forEachIndexed { i, m ->
-                Key("MON " + m.name, Modifier.weight(1f), active = monitor == i) { monitor = i }
-            }
-            Key("✕", Modifier.width(56.dp)) { rfb.close(); s.phase = Phase.SETUP; s.status = "LINK CLOSED"; s.statusBad = false }
+    val activity = LocalContext.current as ComponentActivity
+    // full screen is always landscape; otherwise the phone stands as Marko chose (portrait by default)
+    LaunchedEffect(s.full, s.landscape) {
+        activity.requestedOrientation =
+            if (s.full || s.landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        val bars = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+        if (s.full) {
+            bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            bars.hide(WindowInsetsCompat.Type.systemBars())
+        } else bars.show(WindowInsetsCompat.Type.systemBars())
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            s.full = false
+            WindowCompat.getInsetsController(activity.window, activity.window.decorView).show(WindowInsetsCompat.Type.systemBars())
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
+    }
+
+    val screen: @Composable (Modifier) -> Unit = { modifier ->
+    Box(
+        modifier
+            .background(Color.Black)
+            .onSizeChanged { viewSize = it }
+            .pointerInput(rect.contentHashCode(), scrollMode) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    val start = down.position
+                    val t0 = System.currentTimeMillis()
+                    var moved = false
+                    var multi = false
+                    var dragging = false
+                    var last = start
+                    var scrollAcc = 0f
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.filter { it.pressed }
+                        if (pressed.isEmpty()) break
+                        if (pressed.size >= 2) {
+                            // two fingers: zoom and pan the picture, nothing is sent to the Mac
+                            multi = true
+                            val a = pressed[0]; val b = pressed[1]
+                            val prevDist = hypot(a.previousPosition.x - b.previousPosition.x, a.previousPosition.y - b.previousPosition.y)
+                            val dist = hypot(a.position.x - b.position.x, a.position.y - b.position.y)
+                            val centre = (a.position + b.position) / 2f
+                            val prevCentre = (a.previousPosition + b.previousPosition) / 2f
+                            if (prevDist > 0f) {
+                                val newZoom = (zoom * dist / prevDist).coerceIn(1f, 6f)
+                                val k = newZoom / zoom
+                                // keep the point under the fingers where it is
+                                val origin = Offset(baseX(), baseY())
+                                pan = clampPan((pan - (centre - origin)) * k + (centre - origin) + (centre - prevCentre))
+                                zoom = newZoom
+                            }
+                            event.changes.forEach { it.consume() }
+                            continue
+                        }
+                        val c = pressed[0]
+                        val p = c.position
+                        if (!moved && (p - start).getDistance() > 24f) moved = true
+                        if (multi) { c.consume(); continue }
+                        if (scrollMode) {
+                            // one finger in SCROLL: up and down turn the Mac's wheel
+                            scrollAcc += c.positionChange().y
+                            val (fx, fy) = toFb(start)
+                            while (abs(scrollAcc) > 40f) {
+                                val button = if (scrollAcc > 0) 8 else 16   // finger down = content down = wheel up
+                                rfb.pointer(fx, fy, button); rfb.pointer(fx, fy, 0)
+                                scrollAcc -= 40f * kotlin.math.sign(scrollAcc)
+                            }
+                        } else if (!dragging && !moved && System.currentTimeMillis() - t0 > 450) {
+                            // a long press: the button goes down and the finger drags
+                            dragging = true
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            val (fx, fy) = toFb(p); rfb.pointer(fx, fy, 1)
+                        } else if (moved) {
+                            val (fx, fy) = toFb(p); rfb.pointer(fx, fy, if (dragging) 1 else 0)
+                        }
+                        last = p
+                        c.consume()
+                    }
+                    if (multi || scrollMode) return@awaitEachGesture
+                    val (fx, fy) = toFb(last)
+                    when {
+                        dragging && !moved -> { rfb.pointer(fx, fy, 0); rfb.pointer(fx, fy, 4); rfb.pointer(fx, fy, 0) } // long press = right click
+                        dragging -> rfb.pointer(fx, fy, 0)
+                        !moved -> { rfb.pointer(fx, fy, 0); rfb.pointer(fx, fy, 1); rfb.pointer(fx, fy, 0) }           // tap = click
+                        else -> Unit                                                                                // a move only
+                    }
+                }
+            }
+    ) {
+        val bmp = rfb.bitmap
+        if (bmp != null && rect[2] > 0) {
+            Canvas(Modifier.fillMaxSize()) {
+                s.tick // redraw on every frame
+                drawImage(
+                    bmp.asImageBitmap(),
+                    srcOffset = IntOffset(rect[0], rect[1]),
+                    srcSize = IntSize(rect[2], rect[3]),
+                    dstOffset = IntOffset((baseX() + pan.x).roundToInt(), (baseY() + pan.y).roundToInt()),
+                    dstSize = IntSize((rect[2] * scale()).roundToInt(), (rect[3] * scale()).roundToInt()),
+                    filterQuality = FilterQuality.Medium,
+                )
+            }
+        }
+    }
+    }
+
+    val monitors: @Composable (Modifier) -> Unit = { modifier ->
+        MONITORS.forEachIndexed { i, m ->
+            Key("MON " + m.name, modifier, active = monitor == i) { monitor = i }
+        }
+    }
+    val close: @Composable () -> Unit = {
+        Key("✕", Modifier.width(56.dp)) { rfb.close(); s.phase = Phase.SETUP; s.status = "LINK CLOSED"; s.statusBad = false }
+    }
+    val meter: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             T("↓ %.2f MB  ↑ %.2f MB".format(rx / 1e6, tx / 1e6), Cyan, 13)
             T("$kbps kbit/s", Cyan, 13)
             T("${s.lastMs} ms", Cyan, 13)
         }
-
-        // ── the screen
-        Box(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .background(Color.Black)
-                .onSizeChanged { viewSize = it }
-                .pointerInput(rect.contentHashCode(), scrollMode) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown()
-                        val start = down.position
-                        val t0 = System.currentTimeMillis()
-                        var moved = false
-                        var multi = false
-                        var dragging = false
-                        var last = start
-                        var scrollAcc = 0f
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val pressed = event.changes.filter { it.pressed }
-                            if (pressed.isEmpty()) break
-                            if (pressed.size >= 2) {
-                                // two fingers: zoom and pan the picture, nothing is sent to the Mac
-                                multi = true
-                                val a = pressed[0]; val b = pressed[1]
-                                val prevDist = hypot(a.previousPosition.x - b.previousPosition.x, a.previousPosition.y - b.previousPosition.y)
-                                val dist = hypot(a.position.x - b.position.x, a.position.y - b.position.y)
-                                val centre = (a.position + b.position) / 2f
-                                val prevCentre = (a.previousPosition + b.previousPosition) / 2f
-                                if (prevDist > 0f) {
-                                    val newZoom = (zoom * dist / prevDist).coerceIn(1f, 6f)
-                                    val k = newZoom / zoom
-                                    // keep the point under the fingers where it is
-                                    val origin = Offset(baseX(), baseY())
-                                    pan = clampPan((pan - (centre - origin)) * k + (centre - origin) + (centre - prevCentre))
-                                    zoom = newZoom
-                                }
-                                event.changes.forEach { it.consume() }
-                                continue
-                            }
-                            val c = pressed[0]
-                            val p = c.position
-                            if (!moved && (p - start).getDistance() > 24f) moved = true
-                            if (multi) { c.consume(); continue }
-                            if (scrollMode) {
-                                // one finger in SCROLL: up and down turn the Mac's wheel
-                                scrollAcc += c.positionChange().y
-                                val (fx, fy) = toFb(start)
-                                while (abs(scrollAcc) > 40f) {
-                                    val button = if (scrollAcc > 0) 8 else 16   // finger down = content down = wheel up
-                                    rfb.pointer(fx, fy, button); rfb.pointer(fx, fy, 0)
-                                    scrollAcc -= 40f * kotlin.math.sign(scrollAcc)
-                                }
-                            } else if (!dragging && !moved && System.currentTimeMillis() - t0 > 450) {
-                                // a long press: the button goes down and the finger drags
-                                dragging = true
-                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                                val (fx, fy) = toFb(p); rfb.pointer(fx, fy, 1)
-                            } else if (moved) {
-                                val (fx, fy) = toFb(p); rfb.pointer(fx, fy, if (dragging) 1 else 0)
-                            }
-                            last = p
-                            c.consume()
-                        }
-                        if (multi || scrollMode) return@awaitEachGesture
-                        val (fx, fy) = toFb(last)
-                        when {
-                            dragging && !moved -> { rfb.pointer(fx, fy, 0); rfb.pointer(fx, fy, 4); rfb.pointer(fx, fy, 0) } // long press = right click
-                            dragging -> rfb.pointer(fx, fy, 0)
-                            !moved -> { rfb.pointer(fx, fy, 0); rfb.pointer(fx, fy, 1); rfb.pointer(fx, fy, 0) }           // tap = click
-                            else -> Unit                                                                                // a move only
-                        }
-                    }
-                }
-        ) {
-            val bmp = rfb.bitmap
-            if (bmp != null && rect[2] > 0) {
-                Canvas(Modifier.fillMaxSize()) {
-                    s.tick // redraw on every frame
-                    drawImage(
-                        bmp.asImageBitmap(),
-                        srcOffset = IntOffset(rect[0], rect[1]),
-                        srcSize = IntSize(rect[2], rect[3]),
-                        dstOffset = IntOffset((baseX() + pan.x).roundToInt(), (baseY() + pan.y).roundToInt()),
-                        dstSize = IntSize((rect[2] * scale()).roundToInt(), (rect[3] * scale()).roundToInt()),
-                        filterQuality = FilterQuality.Medium,
-                    )
-                }
+    }
+    val modKeys: @Composable () -> Unit = {
+        listOf("⌘" to K_CMD, "⌥" to K_OPT, "⌃" to K_CTRL, "⇧" to K_SHIFT).forEach { (label, k) ->
+            Key(label, Modifier.width(52.dp), active = k in mods.value, size = 22) {
+                mods.value = if (k in mods.value) mods.value - k else mods.value + k
             }
         }
-
-        // ── hands: modifiers, keys, frame rate
+    }
+    val specialKeys = listOf("ESC" to K_ESC, "TAB" to K_TAB, "⏎" to K_RETURN, "⌫" to K_BACKSPACE,
+        "←" to K_LEFT, "↑" to K_UP, "↓" to K_DOWN, "→" to K_RIGHT)
+    val keysRow: @Composable () -> Unit = {
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            listOf("⌘" to K_CMD, "⌥" to K_OPT, "⌃" to K_CTRL, "⇧" to K_SHIFT).forEach { (label, k) ->
-                Key(label, Modifier.width(52.dp), active = k in mods.value, size = 22) {
-                    mods.value = if (k in mods.value) mods.value - k else mods.value + k
-                }
-            }
-            listOf("ESC" to K_ESC, "TAB" to K_TAB, "⏎" to K_RETURN, "⌫" to K_BACKSPACE,
-                "←" to K_LEFT, "↑" to K_UP, "↓" to K_DOWN, "→" to K_RIGHT).forEach { (label, k) ->
-                Key(label, Modifier.width(60.dp), size = 18) { tapKey(k) }
-            }
+            modKeys()
+            specialKeys.forEach { (label, k) -> Key(label, Modifier.width(60.dp), size = 18) { tapKey(k) } }
         }
-        Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Key("⌨ KEYS", Modifier.weight(1f), active = keyboard) { keyboard = !keyboard }
-            Key("SCROLL", Modifier.weight(1f), active = scrollMode) { scrollMode = !scrollMode }
-            Key("${FPS[fpsIndex].first} FPS", Modifier.weight(1f)) { fpsIndex = (fpsIndex + 1) % FPS.size }
-        }
+    }
+    val typing: @Composable () -> Unit = {
         if (keyboard) TypingField(onText = { text ->
             text.forEach { ch ->
                 when (ch) {
@@ -447,6 +471,79 @@ private fun Live(s: Session) {
             }
         }, onBackspace = { tapKey(K_BACKSPACE) })
     }
+    val toggles: @Composable (Modifier) -> Unit = { modifier ->
+        Key("⌨ KEYS", modifier, active = keyboard) { keyboard = !keyboard }
+        Key("SCROLL", modifier, active = scrollMode) { scrollMode = !scrollMode }
+        Key("${FPS[fpsIndex].first} FPS", modifier) { fpsIndex = (fpsIndex + 1) % FPS.size }
+    }
+    val views: @Composable (Modifier) -> Unit = { modifier ->
+        Key(if (s.landscape) "▯ PORTRAIT" else "▭ LANDSCAPE", modifier) { s.landscape = !s.landscape }
+        Key("⛶ FULL SCREEN", modifier, active = true) { s.full = true }
+    }
+
+    when {
+        s.full -> Box(Modifier.fillMaxSize().background(Color.Black).imePadding()) {
+            // the Mac's screen edge to edge; over it, half-transparent rectangles: exit, the two monitors, the keyboard
+            screen(Modifier.fillMaxSize())
+            Column(Modifier.align(Alignment.TopCenter).padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Overlay("✕ EXIT FULL") { s.full = false }
+                    MONITORS.forEachIndexed { i, m -> Overlay("MON " + m.name.take(1), active = monitor == i) { monitor = i } }
+                    Overlay("⌨", active = keyboard) { keyboard = !keyboard }
+                    Overlay("SCROLL", active = scrollMode) { scrollMode = !scrollMode }
+                }
+            }
+            if (keyboard) Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xB0000000))) {
+                keysRow()
+                typing()
+            }
+        }
+        s.landscape -> Row(Modifier.fillMaxSize().imePadding()) {
+            screen(Modifier.weight(1f).fillMaxHeight())
+            Column(
+                Modifier.width(300.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { monitors(Modifier.weight(1f)); close() }
+                meter()
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { modKeys() }
+                specialKeys.chunked(4).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        row.forEach { (label, k) -> Key(label, Modifier.weight(1f), size = 18) { tapKey(k) } }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { toggles(Modifier.weight(1f)) }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { views(Modifier.weight(1f)) }
+                typing()
+            }
+        }
+        else -> Column(Modifier.fillMaxSize().imePadding()) {
+            Row(Modifier.fillMaxWidth().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                monitors(Modifier.weight(1f)); close()
+            }
+            meter()
+            screen(Modifier.weight(1f).fillMaxWidth())
+            keysRow()
+            Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { toggles(Modifier.weight(1f)) }
+            Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { views(Modifier.weight(1f)) }
+            typing()
+        }
+    }
+}
+
+/** A half-transparent rectangle over the full-screen picture: big enough for a thumb, faint enough to see through. */
+@Composable
+private fun Overlay(label: String, active: Boolean = false, onClick: () -> Unit) {
+    val view = LocalView.current
+    Box(
+        Modifier
+            .height(48.dp)
+            .background(if (active) Amber.copy(alpha = 0.55f) else Color(0x88000000))
+            .border(1.dp, Amber.copy(alpha = 0.7f))
+            .clickable { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() }
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) { T(label, if (active) Bg else Amber, 16, bold = true) }
 }
 
 /**
