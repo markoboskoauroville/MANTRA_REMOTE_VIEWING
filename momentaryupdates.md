@@ -29,3 +29,9 @@ Tested over 4G through Tailscale on the Nothing Phone 2a: the BenQ desktop appea
 > long-press on any button will open the pop-up explaining what it does
 > FPS pop-up doesn't do that. It just shows FPS
 > side FPS also adds a button for the number of colors. It can be black and white, and I don't know what the minimum colors are. We also save on bandwidth by saving on the color screen. Maybe only black and white color. I don't know. Something in between should be
+> in the status, I want to see, in the current session, how much data went only on the transmission of the images from this application. Basically, I want to see how many megabytes were spent in my session, talking about only transmitting VNC data back and forth
+
+**25.10.2026 19:55, colours measured on the real desktop (one full BenQ picture):** FULL 978 kB, 65K 524, 4096 427,
+512 226, 64 177, 8 159, B/W about 160. Apple's server takes only 32 bit and 16 bit 5-6-5 pixels (it closes the link on
+any 8 bit format); fewer steps inside 32 bits work. A VNC-password session sees only the lock screen, so measurements must
+be made in the app (logged in as Marko), not with the VNC password.

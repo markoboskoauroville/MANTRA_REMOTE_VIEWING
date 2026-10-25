@@ -5,12 +5,15 @@ import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.io.FilterInputStream
+import java.io.FilterOutputStream
 import java.math.BigInteger
 import java.net.InetSocketAddress
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.net.Socket
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.Inflater
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
@@ -23,8 +26,49 @@ import javax.crypto.spec.SecretKeySpec
  * colour), the decoders Raw, CopyRect, Hextile, Zlib and ZRLE, the DesktopSize pseudo-encoding, PointerEvent and
  * KeyEvent. The Mac side is Apple's own Screen Sharing with "VNC viewers may control screen with password" ticked.
  */
+/**
+ * How many colours the Mac sends (Marko, 25.10.2026: "a button for the number of colors ... we also save on bandwidth").
+ * True colour formats only; the fewer the bits, the fewer bytes per pixel and the better ZRLE packs them. B/W is the
+ * 8-colour format drawn in grey on the phone: the cheapest picture there is.
+ */
+class Colours(
+    val label: String, val bpp: Int, val depth: Int,
+    val rMax: Int, val gMax: Int, val bMax: Int, val rShift: Int, val gShift: Int, val bShift: Int,
+    val grey: Boolean = false,
+) {
+    val bytes = bpp / 8
+    /** ZRLE's compressed pixel: three bytes when 32 bits hold only 24 of colour, else the whole pixel. */
+    val cbytes = if (bpp == 32 && depth <= 24) 3 else bytes
+    /** For 8 and 16 bit pixels, every value turned into ARGB once. */
+    val lut: IntArray? = if (bpp <= 16) IntArray(1 shl bpp) { toArgb(it) } else null
+
+    fun toArgb(v: Int): Int {
+        val r = ((v shr rShift) and rMax) * 255 / rMax
+        val g = ((v shr gShift) and gMax) * 255 / gMax
+        val b = ((v shr bShift) and bMax) * 255 / bMax
+        if (grey) { val y = (r * 30 + g * 59 + b * 11) / 100; return (0xff shl 24) or (y shl 16) or (y shl 8) or y }
+        return (0xff shl 24) or (r shl 16) or (g shl 8) or b
+    }
+
+    companion object {
+        // Apple's server takes 32 bit pixels and 16 bit 5-6-5, nothing else (measured 25.10.2026: it closes the link on
+        // any 8 bit format). Fewer steps inside 32 bits do work, and pack far better. One full BenQ picture of the real
+        // desktop: FULL 978 kB, 65K 524, 4096 427, 512 226, 64 177, 8 159, B/W the same 8 shown in grey.
+        val ALL = listOf(
+            Colours("FULL", 32, 24, 255, 255, 255, 16, 8, 0),   // 16 million, 3 bytes a pixel in ZRLE
+            Colours("65K", 16, 16, 31, 63, 31, 11, 5, 0),       // 65 thousand, 2 bytes
+            Colours("4096", 32, 24, 15, 15, 15, 16, 8, 0),      // fewer steps inside 32 bits: fewer distinct
+            Colours("512", 32, 24, 7, 7, 7, 16, 8, 0),          //   colours pack better in ZRLE's palettes
+            Colours("64", 32, 24, 3, 3, 3, 16, 8, 0),
+            Colours("8", 32, 24, 1, 1, 1, 16, 8, 0),
+            Colours("B/W", 32, 24, 1, 1, 1, 16, 8, 0, grey = true),
+        )
+    }
+}
+
 class Rfb(
     private val listener: Listener,
+    private val colours: Colours = Colours.ALL[0],
 ) {
     interface Listener {
         fun onConnected(name: String, width: Int, height: Int)
@@ -43,6 +87,9 @@ class Rfb(
     @Volatile var minIntervalMs = 100L
     /** When true no frames are asked for at all (input still works). */
     @Volatile var frozen = false
+    /** VNC bytes received and sent on this link. */
+    val rxBytes = AtomicLong()
+    val txBytes = AtomicLong()
 
     private var socket: Socket? = null
     private lateinit var input: DataInputStream
@@ -84,8 +131,8 @@ class Rfb(
         synchronized(requestLock) { requestLock.notifyAll() }
     }
 
+    /** A new frame rate: ask again now, for what changed only (a whole picture costs up to a megabyte). */
     fun wake() {
-        fullRequestPending = true
         synchronized(requestLock) { requestLock.notifyAll() }
     }
 
@@ -116,8 +163,17 @@ class Rfb(
         s.connect(InetSocketAddress(host, port), 10_000)
         s.soTimeout = 0
         socket = s
-        input = DataInputStream(BufferedInputStream(s.getInputStream(), 1 shl 16))
-        output = DataOutputStream(BufferedOutputStream(s.getOutputStream(), 1 shl 14))
+        // every byte of VNC that crosses the link, both ways, counted where it leaves and enters the socket
+        val counted = object : FilterInputStream(s.getInputStream()) {
+            override fun read(): Int = super.read().also { if (it >= 0) rxBytes.incrementAndGet() }
+            override fun read(b: ByteArray, off: Int, len: Int): Int = super.read(b, off, len).also { if (it > 0) rxBytes.addAndGet(it.toLong()) }
+        }
+        val countedOut = object : FilterOutputStream(s.getOutputStream()) {
+            override fun write(b: Int) { out.write(b); txBytes.incrementAndGet() }
+            override fun write(b: ByteArray, off: Int, len: Int) { out.write(b, off, len); txBytes.addAndGet(len.toLong()) }
+        }
+        input = DataInputStream(BufferedInputStream(counted, 1 shl 16))
+        output = DataOutputStream(BufferedOutputStream(countedOut, 1 shl 14))
 
         // ProtocolVersion
         val ver = ByteArray(12); input.readFully(ver)
@@ -154,11 +210,12 @@ class Rfb(
         val name = readString()
         resize(w, h)
 
-        // SetPixelFormat: 32 bpp, depth 24, little endian, true colour, R<<16 G<<8 B, so a pixel is an ARGB int
+        // SetPixelFormat: the chosen colours, little endian, true colour
+        val c = colours
         output.writeByte(0); output.write(ByteArray(3))
-        output.writeByte(32); output.writeByte(24); output.writeByte(0); output.writeByte(1)
-        output.writeShort(255); output.writeShort(255); output.writeShort(255)
-        output.writeByte(16); output.writeByte(8); output.writeByte(0); output.write(ByteArray(3))
+        output.writeByte(c.bpp); output.writeByte(c.depth); output.writeByte(0); output.writeByte(1)
+        output.writeShort(c.rMax); output.writeShort(c.gMax); output.writeShort(c.bMax)
+        output.writeByte(c.rShift); output.writeByte(c.gShift); output.writeByte(c.bShift); output.write(ByteArray(3))
         // SetEncodings: ZRLE, Zlib, Hextile, CopyRect, Raw, DesktopSize
         val enc = intArrayOf(16, 6, 5, 1, 0, -223)
         output.writeByte(2); output.writeByte(0); output.writeShort(enc.size)
@@ -255,20 +312,24 @@ class Rfb(
         val b = ByteArray(n); input.readFully(b); bytesIn += n; return b
     }
 
-    private fun raw(x: Int, y: Int, w: Int, h: Int) = rawFrom(readFully(w * h * 4), 0, x, y, w, h)
+    private fun raw(x: Int, y: Int, w: Int, h: Int) = rawFrom(readFully(w * h * colours.bytes), 0, x, y, w, h)
 
     private fun rawFrom(b: ByteArray, off: Int, x: Int, y: Int, w: Int, h: Int) {
         var p = off
         for (row in 0 until h) {
             var i = (y + row) * width + x
             for (col in 0 until w) {
-                pixels[i++] = argb(b, p); p += 4
+                pixels[i++] = argb(b, p); p += colours.bytes
             }
         }
     }
 
-    private fun argb(b: ByteArray, p: Int): Int =
-        (0xff shl 24) or ((b[p + 2].toInt() and 0xff) shl 16) or ((b[p + 1].toInt() and 0xff) shl 8) or (b[p].toInt() and 0xff)
+    /** One pixel of the chosen format, little endian, as ARGB. */
+    private fun argb(b: ByteArray, p: Int): Int = when (colours.bytes) {
+        1 -> colours.lut!![b[p].toInt() and 0xff]
+        2 -> colours.lut!![(b[p].toInt() and 0xff) or ((b[p + 1].toInt() and 0xff) shl 8)]
+        else -> colours.toArgb((b[p].toInt() and 0xff) or ((b[p + 1].toInt() and 0xff) shl 8) or ((b[p + 2].toInt() and 0xff) shl 16))
+    }
 
     private fun copyRect(x: Int, y: Int, w: Int, h: Int) {
         val sx = input.readUnsignedShort(); val sy = input.readUnsignedShort(); bytesIn += 4
@@ -281,7 +342,7 @@ class Rfb(
         for (row in y until y + h) java.util.Arrays.fill(pixels, row * width + x, row * width + x + w, c)
     }
 
-    private fun pixel(): Int = argb(readFully(4), 0)
+    private fun pixel(): Int = argb(readFully(colours.bytes), 0)
 
     private fun hextile(x: Int, y: Int, w: Int, h: Int) {
         var bg = 0xff000000.toInt(); var fg = 0xffffffff.toInt()
@@ -327,7 +388,7 @@ class Rfb(
         return out
     }
 
-    private fun zlib(x: Int, y: Int, w: Int, h: Int) = rawFrom(inflate(zlibInflater, w * h * 4), 0, x, y, w, h)
+    private fun zlib(x: Int, y: Int, w: Int, h: Int) = rawFrom(inflate(zlibInflater, w * h * colours.bytes), 0, x, y, w, h)
 
     /** ZRLE reads from one continuous zlib stream; the compressed length is per rectangle. */
     private var zbuf = ByteArray(0)
@@ -363,11 +424,11 @@ class Rfb(
 
     private fun zByte(): Int = zbuf[zpos++].toInt() and 0xff
 
-    /** CPIXEL: 3 bytes (B, G, R) for 32 bpp depth 24. */
+    /** CPIXEL: 3 bytes for 32 bpp depth 24, otherwise the whole pixel. */
     private fun cpixel(): Int {
-        val b = zbuf[zpos].toInt() and 0xff; val g = zbuf[zpos + 1].toInt() and 0xff; val r = zbuf[zpos + 2].toInt() and 0xff
-        zpos += 3
-        return (0xff shl 24) or (r shl 16) or (g shl 8) or b
+        val v = argb(zbuf, zpos)
+        zpos += colours.cbytes
+        return v
     }
 
     private fun runLength(): Int {

@@ -9,7 +9,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import android.net.TrafficStats
 import android.os.Bundle
 import android.os.Process
 import android.view.HapticFeedbackConstants
@@ -122,6 +121,7 @@ private fun helpText(label: String): String {
         l.contains("KEYS") -> "Opens the phone's keyboard. What you type is typed on the Mac."
         l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
+        l == "FULL" || l == "65K" || l == "4096" || l == "512" || l == "64" || l == "8" || l == "B/W" || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
@@ -176,7 +176,12 @@ private class Session : Rfb.Listener {
     var tick by mutableLongStateOf(0L)
     var frames by mutableLongStateOf(0L)
     var lastMs by mutableLongStateOf(0L)
-    var rfb: Rfb? = null
+    var rfb by mutableStateOf<Rfb?>(null)
+    /** What the last CONNECT dialled, so a change of colours can dial again with the same. */
+    var dial: (Colours) -> Unit = {}
+    /** VNC bytes of the links already closed in this session (a change of colours dials again). */
+    var baseRx = 0L
+    var baseTx = 0L
     var full by mutableStateOf(false)
     var loginPassword = ""
     var prefs: android.content.SharedPreferences? = null
@@ -281,8 +286,13 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
             prefs.edit().putString("host", host).putString("port", port).putString("password", password).putString("login", login).putString("user", user).apply()
             s.loginPassword = login
             s.phase = Phase.CONNECTING; s.status = "> DIAL $host:$port"; s.statusBad = false
-            val rfb = Rfb(s); s.rfb = rfb
-            rfb.connect(host, port.toIntOrNull() ?: 5900, password, user, login)
+            s.rfb?.close(); s.rfb = null; s.baseRx = 0; s.baseTx = 0   // CONNECT starts a new session
+            s.dial = { colours ->
+                s.rfb?.let { old -> old.close(); s.baseRx += old.rxBytes.get(); s.baseTx += old.txBytes.get() }
+                val rfb = Rfb(s, colours); s.rfb = rfb
+                rfb.connect(host, port.toIntOrNull() ?: 5900, password, user, login)
+            }
+            s.dial(coloursSaved(prefs))
         }
         Spacer(Modifier.height(12.dp))
         T("> " + s.status, if (s.statusBad) RedAlert else GreenOk, 16)
@@ -299,6 +309,12 @@ private fun monitorRect(i: Int, fbW: Int, fbH: Int): IntArray {
     if (fbW != totalW || fbH != totalH) return intArrayOf(0, 0, fbW, fbH)
     val m = MONITORS[i]
     return intArrayOf(m.x, m.y, m.w, m.h)
+}
+
+/** The colours chosen last time, remembered by name; FULL when none was chosen. */
+private fun coloursSaved(prefs: android.content.SharedPreferences?): Colours {
+    val saved = prefs?.getString("colours_label", "FULL") ?: "FULL"
+    return Colours.ALL.firstOrNull { it.label == saved } ?: Colours.ALL[0]
 }
 
 private val FPS = listOf("0.2" to 5000L, "0.5" to 2000L, "1" to 1000L, "2" to 500L, "5" to 200L, "10" to 100L, "MAX" to 0L)
@@ -327,6 +343,15 @@ private fun Live(s: Session) {
         mutableIntStateOf(FPS.indexOfFirst { it.first == saved }.takeIf { it >= 0 } ?: FPS.indexOfFirst { it.first == "1" })
     }
     var fpsMenu by remember { mutableStateOf(false) }
+    var colours by remember { mutableStateOf(coloursSaved(s.prefs)) }
+    var coloursMenu by remember { mutableStateOf(false) }
+    // a new number of colours changes every pixel's size: the app dials again (auto-login makes it a second)
+    fun setColours(c: Colours) {
+        if (c.label == colours.label) return
+        colours = c
+        s.prefs?.edit()?.putString("colours_label", c.label)?.apply()
+        s.dial(c)
+    }
     var zoom by remember { mutableStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
@@ -335,25 +360,24 @@ private fun Live(s: Session) {
     val mods = remember { mutableStateOf(setOf<Int>()) }
     var rx by remember { mutableLongStateOf(0L) }
     var tx by remember { mutableLongStateOf(0L) }
-    val rx0 = remember { TrafficStats.getUidRxBytes(Process.myUid()) }
-    val tx0 = remember { TrafficStats.getUidTxBytes(Process.myUid()) }
     var kbps by remember { mutableLongStateOf(0L) }
     val view = LocalView.current
 
     val rect = monitorRect(monitor, s.fbW, s.fbH)
-    LaunchedEffect(monitor, s.fbW, s.fbH) {
+    LaunchedEffect(rfb, monitor, s.fbW, s.fbH) {
         rfb.setRegion(rect[0], rect[1], rect[2], rect[3]); zoom = 1f; pan = Offset.Zero
     }
-    LaunchedEffect(fpsIndex) {
+    LaunchedEffect(rfb, fpsIndex) {
         rfb.minIntervalMs = FPS[fpsIndex].second; rfb.wake()
         s.prefs?.edit()?.putString("fps_label", FPS[fpsIndex].first)?.apply()
     }
     LaunchedEffect(Unit) {
+        // only VNC: the bytes this session's links received and sent, both ways (Marko, 25.10.2026)
         var last = 0L
         while (true) {
-            val r = TrafficStats.getUidRxBytes(Process.myUid()) - rx0
-            tx = TrafficStats.getUidTxBytes(Process.myUid()) - tx0
-            kbps = (r - last) * 8 / 1000; last = r; rx = r
+            val r = s.baseRx + (s.rfb?.rxBytes?.get() ?: 0)
+            val t = s.baseTx + (s.rfb?.txBytes?.get() ?: 0)
+            kbps = ((r + t) - last) * 8 / 1000; last = r + t; rx = r; tx = t
             delay(1000)
         }
     }
@@ -483,6 +507,9 @@ private fun Live(s: Session) {
                 }
             }
     ) {
+        // read the frame counter here, not only inside the drawing: after a new dial the bitmap appears later, and
+        // this is what makes the screen look again
+        @Suppress("UNUSED_VARIABLE") val frame = s.tick
         val bmp = rfb.bitmap
         if (bmp != null && rect[2] > 0) {
             Canvas(Modifier.fillMaxSize()) {
@@ -510,7 +537,7 @@ private fun Live(s: Session) {
     }
     val meter: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            T("↓ %.2f MB  ↑ %.2f MB".format(rx / 1e6, tx / 1e6), Cyan, 13)
+            T("VNC %.2f MB  ↓%.2f ↑%.2f".format((rx + tx) / 1e6, rx / 1e6, tx / 1e6), Cyan, 13)
             T("$kbps kbit/s", Cyan, 13)
             T("${s.lastMs} ms", Cyan, 13)
         }
@@ -555,10 +582,13 @@ private fun Live(s: Session) {
         if (keyboard) TypingField(onText = { typeText(it) }, onBackspace = { tapKey(K_BACKSPACE) })
     }
     val toggles: @Composable (Modifier) -> Unit = { modifier ->
-        Key("⌨ KEYS", modifier, active = keyboard) { keyboard = !keyboard }
-        Key("SCROLL", modifier, active = scrollMode) { scrollMode = !scrollMode }
-        Key("${FPS[fpsIndex].first} FPS", modifier, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
-        Key("LOGIN", modifier) { login() }
+        Key("KEYS", modifier, active = keyboard, size = 14) { keyboard = !keyboard }
+        Key("SCROLL", modifier, active = scrollMode, size = 14) { scrollMode = !scrollMode }
+        Key("${FPS[fpsIndex].first} FPS", modifier, size = 14, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
+        Key(colours.label, modifier, size = 14, onLongClick = { coloursMenu = true }) {
+            setColours(Colours.ALL[(Colours.ALL.indexOfFirst { it.label == colours.label } + 1) % Colours.ALL.size])
+        }
+        Key("LOGIN", modifier, size = 14) { login() }
     }
     val views: @Composable (Modifier) -> Unit = { modifier ->
         Key(if (s.landscape) "▯ PORTRAIT" else "▭ LANDSCAPE", modifier) { s.landscape = !s.landscape }
@@ -576,6 +606,18 @@ private fun Live(s: Session) {
         }
     }
 
+    if (coloursMenu) Dialog(onDismissRequest = { coloursMenu = false }) {
+        Column(Modifier.background(Bg).border(1.dp, Rule).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            T("── COLOURS ──", AmberDim, 13)
+            T("How many colours the Mac sends. One full picture of the BenQ: FULL 978 kB, 65 000 524, 4096 427, 512 226, 64 177, 8 and B/W about 160.",
+                Color(0xFFF2DDB4), 13, modifier = Modifier.width(220.dp))
+            Colours.ALL.forEach { c ->
+                val name = when (c.label) { "FULL" -> "FULL (16 M)"; "65K" -> "65 000"; "B/W" -> "BLACK & WHITE"; else -> c.label }
+                Key(name, Modifier.width(220.dp), active = c.label == colours.label, size = 18) { setColours(c); coloursMenu = false }
+            }
+        }
+    }
+
     when {
         s.full -> Row(Modifier.fillMaxSize().background(Color.Black).imePadding()) {
             // the CAMERA language (MANTRA_MANIFEST language-camera.md): the picture is sacred, the keys are words in
@@ -587,6 +629,9 @@ private fun Live(s: Session) {
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
                 RailKey("SCROLL", null, if (scrollMode) RailState.ON else RailState.OFF) { scrollMode = !scrollMode }
                 RailKey("FPS", FPS[fpsIndex].first, RailState.OFF, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
+                RailKey("COL", colours.label, RailState.OFF, onLongClick = { coloursMenu = true }) {
+                    setColours(Colours.ALL[(Colours.ALL.indexOfFirst { it.label == colours.label } + 1) % Colours.ALL.size])
+                }
                 RailKey("EXIT", "FULL", RailState.OFF) { s.full = false }
             }
             Box(Modifier.weight(1f).fillMaxHeight()) {
