@@ -1,5 +1,9 @@
 # MANTRA REMOTE
 
+**The Android app, v2 (25.10.2026):** `android/`, the phone controls the Mac over Tailscale with Apple Screen Sharing,
+logged in as Marko, two monitors, gestures, a held link in the background. Release: GitHub v2. How it is built, what is
+open: [TAKEOVER.md](TAKEOVER.md); what was learned: [LESSONS.md](LESSONS.md).
+
 >>> **START HERE IN ANY NEW SESSION: [FEATURE_REQUEST.md](FEATURE_REQUEST.md)**
 >>> That file is the project brain — feature menu, design language, open decisions.
 >>> This README is only the Tailscale/VNC plumbing.
