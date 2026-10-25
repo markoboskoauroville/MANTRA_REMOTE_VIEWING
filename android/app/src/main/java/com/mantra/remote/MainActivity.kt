@@ -631,7 +631,23 @@ private fun Live(s: Session) {
     when {
         s.full -> Row(Modifier.fillMaxSize().background(Color.Black).imePadding()) {
             // the CAMERA language (MANTRA_MANIFEST language-camera.md): the picture is sacred, the keys are words in
-            // the black bands beside it, their colour is their state. Left: where to look. Right: what to press.
+            // the black bands beside it, their colour is their state. Left: what to press. Right: where to look (swapped at Marko's word, 25.10.2026).
+            Column(Modifier.width(76.dp).fillMaxHeight()) {
+                RailKey("LOGIN", null, if (s.loginPassword.isEmpty()) RailState.DEAD else RailState.OFF) { login() }
+                listOf("⌘" to K_CMD, "⇧" to K_SHIFT, "⌥" to K_OPT, "⌃" to K_CTRL).forEach { (label, k) ->
+                    RailKey(label, null, if (k in mods.value) RailState.ARMED else RailState.OFF) {
+                        mods.value = if (k in mods.value) mods.value - k else mods.value + k
+                    }
+                }
+                RailKey("ESC", null, RailState.OFF) { tapKey(K_ESC) }
+                RailKey("TAB", null, RailState.OFF) { tapKey(K_TAB) }
+                RailKey("⏎", null, RailState.OFF) { tapKey(K_RETURN) }
+                RailKey("⌫", null, RailState.OFF) { tapKey(K_BACKSPACE) }
+            }
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                screen(Modifier.fillMaxSize())
+                if (keyboard) Box(Modifier.align(Alignment.BottomCenter)) { typing() }
+            }
             Column(Modifier.width(76.dp).fillMaxHeight()) {
                 MONITORS.forEachIndexed { i, m ->
                     RailKey("MON ${i + 1}", m.name.substringAfter(' '), if (monitor == i) RailState.ON else RailState.OFF) { monitor = i }
@@ -644,22 +660,6 @@ private fun Live(s: Session) {
                 }
                 RailKey("VIEW", "ONLY", if (viewOnly) RailState.ON else RailState.OFF) { viewOnly = !viewOnly }
                 RailKey("EXIT", "FULL", RailState.OFF) { s.full = false }
-            }
-            Box(Modifier.weight(1f).fillMaxHeight()) {
-                screen(Modifier.fillMaxSize())
-                if (keyboard) Box(Modifier.align(Alignment.BottomCenter)) { typing() }
-            }
-            Column(Modifier.width(76.dp).fillMaxHeight()) {
-                RailKey("LOGIN", null, if (s.loginPassword.isEmpty()) RailState.DEAD else RailState.OFF) { login() }
-                listOf("⌘" to K_CMD, "⇧" to K_SHIFT, "⌥" to K_OPT, "⌃" to K_CTRL).forEach { (label, k) ->
-                    RailKey(label, null, if (k in mods.value) RailState.ARMED else RailState.OFF) {
-                        mods.value = if (k in mods.value) mods.value - k else mods.value + k
-                    }
-                }
-                RailKey("ESC", null, RailState.OFF) { tapKey(K_ESC) }
-                RailKey("TAB", null, RailState.OFF) { tapKey(K_TAB) }
-                RailKey("⏎", null, RailState.OFF) { tapKey(K_RETURN) }
-                RailKey("⌫", null, RailState.OFF) { tapKey(K_BACKSPACE) }
             }
         }
         s.landscape -> Row(Modifier.fillMaxSize().imePadding()) {
