@@ -276,7 +276,7 @@ private fun T(text: String, color: Color = Amber, size: Int = 16, bold: Boolean 
 /** A finger-sized key: amber box line, label inside, lit while active. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = false, size: Int = 16, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
+private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = false, size: Int = 16, sub: String? = null, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val view = LocalView.current
     Box(
         modifier
@@ -288,7 +288,14 @@ private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = 
             ) { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() }
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center,
-    ) { T(label, if (active) Bg else Amber, size, bold = true, oneLine = true) }   // a key's word never breaks (Marko, 25.10.2026)
+    ) {
+        // a key's word never breaks (Marko, 25.10.2026); a modifier carries its name under the symbol, small
+        if (sub == null) T(label, if (active) Bg else Amber, size, bold = true, oneLine = true)
+        else Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            T(label, if (active) Bg else Amber, size, bold = true, oneLine = true)
+            T(sub, if (active) Bg else AmberDim, 9, oneLine = true)
+        }
+    }
 }
 
 @Composable
@@ -370,6 +377,8 @@ private val FPS = listOf("0.2" to 5000L, "0.5" to 2000L, "1" to 1000L, "2" to 50
 
 // X11 keysyms as RFB wants them. Apple's server reads Super as Command and Alt as Option.
 private const val K_CMD = 0xffeb
+// symbol, keysym, the name written under it; in the MacBook Pro's order (K_* below are compile-time constants)
+private val MOD_KEYS by lazy { listOf(Triple("⌃", K_CTRL, "control"), Triple("⌥", K_OPT, "option"), Triple("⌘", K_CMD, "command"), Triple("⇧", K_SHIFT, "shift")) }
 private const val K_OPT = 0xffe9
 private const val K_CTRL = 0xffe3
 private const val K_SHIFT = 0xffe1
@@ -466,7 +475,12 @@ private fun Live(s: Session) {
     // app switcher and ⌘ off chooses (Marko, 25.10.2026: "make my Command key a toggle"). ⌥ ⌃ ⇧ stay one-shot.
     fun toggleMod(k: Int) {
         if (k == K_CMD) { cmdHeld = !cmdHeld; rfb.key(K_CMD, cmdHeld) }
-        else mods.value = if (k in mods.value) mods.value - k else mods.value + k
+        else {
+            // ⌃ is also pressed and let go on the Mac at once, so two taps are the Mac's double ⌃ (the Dock Switcher's
+            // square, Marko 25.10.2026: "I double tap, but it does not register"); it still goes with the next key too
+            if (k == K_CTRL && !cmdHeld) { rfb.key(K_CTRL, true); rfb.key(K_CTRL, false) }
+            mods.value = if (k in mods.value) mods.value - k else mods.value + k
+        }
     }
     fun modOn(k: Int) = if (k == K_CMD) cmdHeld else k in mods.value
     fun releaseCmd() { if (cmdHeld) { cmdHeld = false; rfb.key(K_CMD, false) } }
@@ -627,8 +641,9 @@ private fun Live(s: Session) {
         }
     }
     val modKeys: @Composable () -> Unit = {
-        listOf("⌘" to K_CMD, "⌥" to K_OPT, "⌃" to K_CTRL, "⇧" to K_SHIFT).forEach { (label, k) ->
-            Key(label, Modifier.width(52.dp), active = modOn(k), size = 22) { toggleMod(k) }
+        // as on a MacBook Pro's bottom row: control, option, command; shift after (Marko, 25.10.2026)
+        MOD_KEYS.forEach { (label, k, name) ->
+            Key(label, Modifier.width(56.dp), active = modOn(k), size = 20, sub = name) { toggleMod(k) }
         }
     }
     val specialKeys = listOf("ESC" to K_ESC, "TAB" to K_TAB, "⏎" to K_RETURN, "⌫" to K_BACKSPACE,
@@ -708,8 +723,8 @@ private fun Live(s: Session) {
             // the black bands beside it, their colour is their state. Left: what to press. Right: where to look (swapped at Marko's word, 25.10.2026).
             Column(Modifier.width(76.dp).fillMaxHeight()) {
                 RailKey("LOGIN", null, if (s.loginPassword.isEmpty()) RailState.DEAD else RailState.OFF) { login() }
-                listOf("⌘" to K_CMD, "⇧" to K_SHIFT, "⌥" to K_OPT, "⌃" to K_CTRL).forEach { (label, k) ->
-                    RailKey(label, null, if (k == K_CMD && cmdHeld) RailState.ON else if (modOn(k)) RailState.ARMED else RailState.OFF) { toggleMod(k) }
+                MOD_KEYS.forEach { (label, k, name) ->
+                    RailKey(label, name, if (k == K_CMD && cmdHeld) RailState.ON else if (modOn(k)) RailState.ARMED else RailState.OFF) { toggleMod(k) }
                 }
                 RailKey("ESC", null, RailState.OFF) { tapKey(K_ESC) }
                 RailKey("TAB", null, RailState.OFF) { tapKey(K_TAB) }
