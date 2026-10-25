@@ -23,3 +23,4 @@ tap lands at the right Mac coordinates, typing with Shift and Backspace). Waitin
 **25.10.2026 19:35:** auto-login works. The app signs in with Apple's own method (RFB security type 30, Diffie-Hellman +
 AES-128, the Mac user and password from the settings), so macOS opens the desktop directly: no lock screen, nothing typed.
 Tested over 4G through Tailscale on the Nothing Phone 2a: the BenQ desktop appeared at once.
+> please make gestures in my application for remote control: - Two fingers: spreading, pinching, zooming in and out. - Three fingers: moving, panning through the screen. - One finger: tapping, clicking with the mouse
