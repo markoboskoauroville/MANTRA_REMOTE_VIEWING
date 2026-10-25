@@ -122,6 +122,7 @@ private fun helpText(label: String): String {
         l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l == "FULL" || l == "65K" || l == "4096" || l == "512" || l == "64" || l == "8" || l == "B/W" || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
+        l.startsWith("CHROME") -> "The next Chrome tab (Control-Tab on the Mac). Tap again and again to go through the tabs; after the last one it starts at the first. Chrome must be the app in front."
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
@@ -458,6 +459,11 @@ private fun Live(s: Session) {
         if (m.isNotEmpty()) mods.value = emptySet()
     }
     fun tapKey(k: Int) = withMods { rfb.key(k, true); rfb.key(k, false) }
+    // CHROME ▶: Control-Tab, Chrome's next tab, whatever was armed (Marko, 25.10.2026: "go through the tabs")
+    fun nextTab() {
+        mods.value = emptySet()
+        rfb.key(K_CTRL, true); rfb.key(K_TAB, true); rfb.key(K_TAB, false); rfb.key(K_CTRL, false)
+    }
 
     val activity = LocalContext.current as ComponentActivity
     // full screen is always landscape; otherwise the phone stands as Marko chose (portrait by default)
@@ -650,6 +656,7 @@ private fun Live(s: Session) {
         Key(if (s.landscape) "▯ PORTRAIT" else "▭ LANDSCAPE", modifier, size = 14) { s.landscape = !s.landscape }
         Key("⛶ FULL SCREEN", modifier, active = true, size = 14) { s.full = true }
         Key("VIEW ONLY", modifier, active = viewOnly, size = 14) { viewOnly = !viewOnly }
+        Key("CHROME ▶", modifier, size = 14) { nextTab() }
     }
 
     // a long press on FPS: every rate at once, one tap chooses (Marko, 25.10.2026)
@@ -700,6 +707,7 @@ private fun Live(s: Session) {
                     RailKey("MON ${i + 1}", m.name.substringAfter(' '), if (monitor == i) RailState.ON else RailState.OFF) { monitor = i }
                 }
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
+                RailKey("CHROME", "NEXT TAB", RailState.OFF) { nextTab() }
                 RailKey("SCROLL", null, if (scrollMode) RailState.ON else RailState.OFF) { scrollMode = !scrollMode }
                 RailKey("FPS", FPS[fpsIndex].first, RailState.OFF, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
                 RailKey("COL", colours.label, RailState.OFF, onLongClick = { coloursMenu = true }) {
