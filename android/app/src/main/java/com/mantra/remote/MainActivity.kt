@@ -208,6 +208,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
     var port by remember { mutableStateOf(prefs.getString("port", "5900") ?: "5900") }
     var password by remember { mutableStateOf(prefs.getString("password", "") ?: "") }
     var login by remember { mutableStateOf(prefs.getString("login", "") ?: "") }
+    var user by remember { mutableStateOf(prefs.getString("user", "markobosko") ?: "markobosko") }
     Column(
         Modifier.fillMaxSize().imePadding().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -217,15 +218,16 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
         Field("HOST (TAILSCALE NAME OR 100.x.x.x)", host) { host = it.trim() }
         Field("PORT", port, number = true) { port = it.filter(Char::isDigit) }
         Field("VNC PASSWORD (SCREEN SHARING)", password, secret = true) { password = it }
-        Field("MAC LOGIN PASSWORD (THE LOGIN BUTTON TYPES IT)", login, secret = true) { login = it }
+        Field("MAC USER (SHORT NAME)", user) { user = it.trim() }
+        Field("MAC LOGIN PASSWORD (AUTO-LOGIN, AND THE LOGIN BUTTON)", login, secret = true) { login = it }
         Spacer(Modifier.height(12.dp))
         Key(if (s.phase == Phase.CONNECTING) "DIALLING …" else "CONNECT", Modifier.fillMaxWidth(), size = 22) {
             if (s.phase == Phase.CONNECTING) return@Key
-            prefs.edit().putString("host", host).putString("port", port).putString("password", password).putString("login", login).apply()
+            prefs.edit().putString("host", host).putString("port", port).putString("password", password).putString("login", login).putString("user", user).apply()
             s.loginPassword = login
             s.phase = Phase.CONNECTING; s.status = "> DIAL $host:$port"; s.statusBad = false
             val rfb = Rfb(s); s.rfb = rfb
-            rfb.connect(host, port.toIntOrNull() ?: 5900, password)
+            rfb.connect(host, port.toIntOrNull() ?: 5900, password, user, login)
         }
         Spacer(Modifier.height(12.dp))
         T("> " + s.status, if (s.statusBad) RedAlert else GreenOk, 16)

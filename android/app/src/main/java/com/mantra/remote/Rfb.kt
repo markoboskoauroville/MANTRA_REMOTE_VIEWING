@@ -5,7 +5,10 @@ import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.math.BigInteger
 import java.net.InetSocketAddress
+import java.security.MessageDigest
+import java.security.SecureRandom
 import java.net.Socket
 import java.util.concurrent.Executors
 import java.util.zip.Inflater
@@ -54,11 +57,11 @@ class Rfb(
     @Volatile private var fullRequestPending = true
     private val requestLock = Object()
 
-    fun connect(host: String, port: Int, password: String) {
+    fun connect(host: String, port: Int, password: String, macUser: String = "", macPassword: String = "") {
         running = true
         Thread({
             try {
-                run(host, port, password)
+                run(host, port, password, macUser, macPassword)
             } catch (e: Exception) {
                 if (running) listener.onClosed(e.message ?: e.javaClass.simpleName)
             } finally {
@@ -107,7 +110,7 @@ class Rfb(
 
     // ---------------------------------------------------------------- the session
 
-    private fun run(host: String, port: Int, password: String) {
+    private fun run(host: String, port: Int, password: String, macUser: String, macPassword: String) {
         val s = Socket()
         s.tcpNoDelay = true
         s.connect(InetSocketAddress(host, port), 10_000)
@@ -127,6 +130,12 @@ class Rfb(
         if (n == 0) throw IllegalStateException("REFUSED: " + readString())
         val types = ByteArray(n).also { input.readFully(it) }.map { it.toInt() and 0xff }
         when {
+            // Apple's own login (type 30): the Mac account and password go in encrypted, and macOS opens the desktop
+            // itself, no lock screen to type into. This is the auto-login (Marko, 25.10.2026).
+            30 in types && macUser.isNotEmpty() && macPassword.isNotEmpty() -> {
+                output.writeByte(30); output.flush()
+                ardAuth(macUser, macPassword)
+            }
             2 in types -> {
                 output.writeByte(2); output.flush()
                 val challenge = ByteArray(16); input.readFully(challenge)
@@ -136,7 +145,7 @@ class Rfb(
             else -> throw IllegalStateException(
                 "NO VNC PASSWORD ON THE MAC (server offers $types). Tick \"VNC viewers may control screen with password\".")
         }
-        if (input.readInt() != 0) throw IllegalStateException("PASSWORD REFUSED: " + runCatching { readString() }.getOrDefault(""))
+        if (input.readInt() != 0) throw IllegalStateException("LOGIN REFUSED: " + runCatching { readString() }.getOrDefault(""))
 
         // ClientInit (shared, so the Mac's own screen stays as it is) and ServerInit
         output.writeByte(1); output.flush()
@@ -404,6 +413,43 @@ class Rfb(
                 }
             }
             else -> throw IllegalStateException("ZRLE SUBENCODING $sub")
+        }
+    }
+
+    /**
+     * Apple Remote Desktop authentication (RFB security type 30): Diffie-Hellman with the server's generator and prime,
+     * the shared secret's MD5 as an AES-128 key, and 128 bytes of credentials (user in the first 64, password in the
+     * second 64, each ending in a zero byte, the rest random) encrypted with it in ECB.
+     */
+    private fun ardAuth(user: String, password: String) {
+        val generator = input.readUnsignedShort()
+        val keyLen = input.readUnsignedShort()
+        val prime = BigInteger(1, ByteArray(keyLen).also { input.readFully(it) })
+        val serverPub = BigInteger(1, ByteArray(keyLen).also { input.readFully(it) })
+        val rnd = SecureRandom()
+        val priv = BigInteger(keyLen * 8 - 1, rnd).max(BigInteger.TWO)
+        val pub = BigInteger.valueOf(generator.toLong()).modPow(priv, prime)
+        val shared = serverPub.modPow(priv, prime)
+        val key = MessageDigest.getInstance("MD5").digest(fixed(shared, keyLen))
+        val cred = ByteArray(128).also { rnd.nextBytes(it) }
+        val u = user.toByteArray(Charsets.UTF_8).copyOf(minOf(63, user.toByteArray().size))
+        val pw = password.toByteArray(Charsets.UTF_8).let { it.copyOf(minOf(63, it.size)) }
+        System.arraycopy(u, 0, cred, 0, u.size); cred[u.size] = 0
+        System.arraycopy(pw, 0, cred, 64, pw.size); cred[64 + pw.size] = 0
+        val aes = Cipher.getInstance("AES/ECB/NoPadding")
+        aes.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"))
+        output.write(aes.doFinal(cred))
+        output.write(fixed(pub, keyLen))
+        output.flush()
+    }
+
+    /** A big number as exactly n bytes, big-endian, zero-padded on the left. */
+    private fun fixed(v: BigInteger, n: Int): ByteArray {
+        val b = v.toByteArray()
+        return when {
+            b.size == n -> b
+            b.size > n -> b.copyOfRange(b.size - n, b.size)
+            else -> ByteArray(n - b.size) + b
         }
     }
 

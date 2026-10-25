@@ -19,3 +19,7 @@ tap lands at the right Mac coordinates, typing with Shift and Backspace). Waitin
 > please make an action button "Login." In the settings, I'm going to write the password. When I press Login, it's going to type the password. Every time I need a password in this login screen or any screen that pops up on the screen, I just press Login. Please make these action buttons without a frame, half transparent, text only, without shadow, like subtitles. Imagine the subtitles so they don't obscure the master of the screen. Think how to make these action buttons really not obscure the screen. Maybe at the bottom? I don't know. Take a screenshot and make it somehow smaller and less distracting
 > please look at my camera app and make the same user interface with the action buttons on the side of the screen. Check my camera app
 > make this app auto-login to the macOS. It should not be waiting for me. Just when you open, you log in automatically. Auto-login, please
+
+**25.10.2026 19:35:** auto-login works. The app signs in with Apple's own method (RFB security type 30, Diffie-Hellman +
+AES-128, the Mac user and password from the settings), so macOS opens the desktop directly: no lock screen, nothing typed.
+Tested over 4G through Tailscale on the Nothing Phone 2a: the BenQ desktop appeared at once.
