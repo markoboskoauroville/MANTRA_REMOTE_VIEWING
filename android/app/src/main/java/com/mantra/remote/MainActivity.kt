@@ -122,7 +122,7 @@ private fun helpText(label: String): String {
         l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l == "FULL" || l == "65K" || l == "4096" || l == "512" || l == "64" || l == "8" || l == "B/W" || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
-        l.startsWith("NEXT") -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first. It works in VIEW ONLY too."
+        l.startsWith("NEXT") || l == "TAB ▶" -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first. It works in VIEW ONLY too."
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
@@ -266,9 +266,10 @@ private fun App(prefs: android.content.SharedPreferences, session: Session) {
 }
 
 @Composable
-private fun T(text: String, color: Color = Amber, size: Int = 16, bold: Boolean = false, modifier: Modifier = Modifier) =
+private fun T(text: String, color: Color = Amber, size: Int = 16, bold: Boolean = false, modifier: Modifier = Modifier, oneLine: Boolean = false) =
     androidx.compose.material3.Text(
         text, modifier = modifier, color = color, fontFamily = Mono, fontSize = size.sp,
+        maxLines = if (oneLine) 1 else Int.MAX_VALUE, softWrap = !oneLine,
         fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, lineHeight = (size * 1.4f).sp,
     )
 
@@ -287,7 +288,7 @@ private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = 
             ) { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() }
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center,
-    ) { T(label, if (active) Bg else Amber, size, bold = true) }
+    ) { T(label, if (active) Bg else Amber, size, bold = true, oneLine = true) }   // a key's word never breaks (Marko, 25.10.2026)
 }
 
 @Composable
@@ -656,10 +657,10 @@ private fun Live(s: Session) {
         Key("LOGIN", modifier, size = 14) { login() }
     }
     val views: @Composable (Modifier) -> Unit = { modifier ->
-        Key(if (s.landscape) "▯ PORTRAIT" else "▭ LANDSCAPE", modifier, size = 14) { s.landscape = !s.landscape }
-        Key("⛶ FULL SCREEN", modifier, active = true, size = 14) { s.full = true }
+        // LANDSCAPE left the row (Marko, 25.10.2026: "more space for the letters"); FULL SCREEN is the sideways view
+        Key("⛶ FULL", modifier, active = true, size = 14) { s.full = true }
         Key("VIEW ONLY", modifier, active = viewOnly, size = 14) { viewOnly = !viewOnly }
-        Key("NEXT TAB ▶", modifier, size = 14) { nextTab() }
+        Key("TAB ▶", modifier, size = 14) { nextTab() }
     }
 
     // a long press on FPS: every rate at once, one tap chooses (Marko, 25.10.2026)
