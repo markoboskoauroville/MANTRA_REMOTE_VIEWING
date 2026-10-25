@@ -129,6 +129,7 @@ private class Session : Rfb.Listener {
     var rfb: Rfb? = null
     var full by mutableStateOf(false)
     var loginPassword = ""
+    var prefs: android.content.SharedPreferences? = null
     var landscape by mutableStateOf(false)
 
     override fun onConnected(name: String, width: Int, height: Int) {
@@ -146,7 +147,7 @@ private class Session : Rfb.Listener {
 
 @Composable
 private fun App(prefs: android.content.SharedPreferences) {
-    val session = remember { Session().also { it.loginPassword = prefs.getString("login", "") ?: "" } }
+    val session = remember { Session().also { it.loginPassword = prefs.getString("login", "") ?: ""; it.prefs = prefs } }
     Box(
         Modifier
             .fillMaxSize()
@@ -266,7 +267,8 @@ private const val K_DOWN = 0xff54
 private fun Live(s: Session) {
     val rfb = s.rfb ?: return
     var monitor by remember { mutableIntStateOf(0) }
-    var fpsIndex by remember { mutableIntStateOf(3) }
+    // the frame rate is remembered between restarts; 1 FPS when nothing was chosen yet (Marko, 25.10.2026)
+    var fpsIndex by remember { mutableIntStateOf((s.prefs?.getInt("fps", 1) ?: 1).coerceIn(0, FPS.size - 1)) }
     var zoom by remember { mutableStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
@@ -284,7 +286,10 @@ private fun Live(s: Session) {
     LaunchedEffect(monitor, s.fbW, s.fbH) {
         rfb.setRegion(rect[0], rect[1], rect[2], rect[3]); zoom = 1f; pan = Offset.Zero
     }
-    LaunchedEffect(fpsIndex) { rfb.minIntervalMs = FPS[fpsIndex].second; rfb.wake() }
+    LaunchedEffect(fpsIndex) {
+        rfb.minIntervalMs = FPS[fpsIndex].second; rfb.wake()
+        s.prefs?.edit()?.putInt("fps", fpsIndex)?.apply()
+    }
     LaunchedEffect(Unit) {
         var last = 0L
         while (true) {
@@ -359,20 +364,27 @@ private fun Live(s: Session) {
                         val event = awaitPointerEvent()
                         val pressed = event.changes.filter { it.pressed }
                         if (pressed.isEmpty()) break
-                        if (pressed.size >= 2) {
-                            // two fingers: zoom and pan the picture, nothing is sent to the Mac
+                        // Marko's gestures (25.10.2026): two fingers zoom, three fingers pan, one finger is the mouse.
+                        // Nothing done with two or three fingers reaches the Mac.
+                        if (pressed.size >= 3) {
+                            multi = true
+                            val move = pressed.fold(Offset.Zero) { acc, c -> acc + (c.position - c.previousPosition) } / pressed.size.toFloat()
+                            pan = clampPan(pan + move)
+                            event.changes.forEach { it.consume() }
+                            continue
+                        }
+                        if (pressed.size == 2) {
                             multi = true
                             val a = pressed[0]; val b = pressed[1]
                             val prevDist = hypot(a.previousPosition.x - b.previousPosition.x, a.previousPosition.y - b.previousPosition.y)
                             val dist = hypot(a.position.x - b.position.x, a.position.y - b.position.y)
                             val centre = (a.position + b.position) / 2f
-                            val prevCentre = (a.previousPosition + b.previousPosition) / 2f
                             if (prevDist > 0f) {
-                                val newZoom = (zoom * dist / prevDist).coerceIn(1f, 6f)
+                                val newZoom = (zoom * dist / prevDist).coerceIn(1f, 8f)
                                 val k = newZoom / zoom
-                                // keep the point under the fingers where it is
+                                // spread or pinch around the point between the fingers: it stays where it is
                                 val origin = Offset(baseX(), baseY())
-                                pan = clampPan((pan - (centre - origin)) * k + (centre - origin) + (centre - prevCentre))
+                                pan = clampPan((pan - (centre - origin)) * k + (centre - origin))
                                 zoom = newZoom
                             }
                             event.changes.forEach { it.consume() }
