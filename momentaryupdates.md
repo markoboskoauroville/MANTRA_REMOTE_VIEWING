@@ -13,3 +13,6 @@ tap lands at the right Mac coordinates, typing with Shift and Backspace). Waitin
 (pkg in ~/Downloads/Tailscale), Screen Sharing with a VNC password, Tailscale app on the phone.
 
 > plugged in. Start testing. Adjust the testing in my Mac, and let's go
+
+**25.10.2026 19:27, first connection over 4G works (Mac lock screen seen on the phone):**
+> please make this app work in portrait mode. It's very important. Put the switch for portrait and landscape there, because my screen on my computer is, of course, landscape make this app work in landscape obvious switch in landscape easy to go into the full screen and exit full screen this app with some overlay over it, some kind of rectangle which is half transparent fullscreen action button. Exit. Entering actually, maybe when you enter full screen, you just orient the screen to landscape. Always landscape
