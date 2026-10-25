@@ -26,6 +26,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -73,6 +74,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -492,22 +494,33 @@ private fun Live(s: Session) {
     }
 
     when {
-        s.full -> Box(Modifier.fillMaxSize().background(Color.Black).imePadding()) {
-            // the Mac's screen edge to edge; the actions are one line of faint words in the bottom right corner, like
-            // subtitles: the middle of the bottom edge is the Dock, the corner is the emptiest place on a Mac
-            screen(Modifier.fillMaxSize())
-            Column(Modifier.align(Alignment.BottomEnd).fillMaxWidth(), horizontalAlignment = Alignment.End) {
-                Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                    Overlay("EXIT") { s.full = false }
-                    MONITORS.forEachIndexed { i, m -> Overlay("MON " + m.name.take(1), active = monitor == i) { monitor = i } }
-                    Overlay("KEYS", active = keyboard) { keyboard = !keyboard }
-                    Overlay("SCROLL", active = scrollMode) { scrollMode = !scrollMode }
-                    Overlay("LOGIN") { login() }
+        s.full -> Row(Modifier.fillMaxSize().background(Color.Black).imePadding()) {
+            // the CAMERA language (MANTRA_MANIFEST language-camera.md): the picture is sacred, the keys are words in
+            // the black bands beside it, their colour is their state. Left: where to look. Right: what to press.
+            Column(Modifier.width(76.dp).fillMaxHeight()) {
+                MONITORS.forEachIndexed { i, m ->
+                    RailKey("MON ${i + 1}", m.name.substringAfter(' '), if (monitor == i) RailState.ON else RailState.OFF) { monitor = i }
                 }
-                if (keyboard) Column(Modifier.fillMaxWidth().background(Color(0xB0000000))) {
-                    keysRow()
-                    typing()
+                RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
+                RailKey("SCROLL", null, if (scrollMode) RailState.ON else RailState.OFF) { scrollMode = !scrollMode }
+                RailKey("FPS", FPS[fpsIndex].first, RailState.OFF) { fpsIndex = (fpsIndex + 1) % FPS.size }
+                RailKey("EXIT", "FULL", RailState.OFF) { s.full = false }
+            }
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                screen(Modifier.fillMaxSize())
+                if (keyboard) Box(Modifier.align(Alignment.BottomCenter)) { typing() }
+            }
+            Column(Modifier.width(76.dp).fillMaxHeight()) {
+                RailKey("LOGIN", null, if (s.loginPassword.isEmpty()) RailState.DEAD else RailState.OFF) { login() }
+                listOf("⌘" to K_CMD, "⇧" to K_SHIFT, "⌥" to K_OPT, "⌃" to K_CTRL).forEach { (label, k) ->
+                    RailKey(label, null, if (k in mods.value) RailState.ARMED else RailState.OFF) {
+                        mods.value = if (k in mods.value) mods.value - k else mods.value + k
+                    }
                 }
+                RailKey("ESC", null, RailState.OFF) { tapKey(K_ESC) }
+                RailKey("TAB", null, RailState.OFF) { tapKey(K_TAB) }
+                RailKey("⏎", null, RailState.OFF) { tapKey(K_RETURN) }
+                RailKey("⌫", null, RailState.OFF) { tapKey(K_BACKSPACE) }
             }
         }
         s.landscape -> Row(Modifier.fillMaxSize().imePadding()) {
@@ -543,19 +556,41 @@ private fun Live(s: Session) {
     }
 }
 
+/** The colour of a rail key is its state, and the only sign of it (language-camera.md 2). */
+private enum class RailState(val color: Color) {
+    ON(Color(0xFF33D17A)),      // green: on, the one in use
+    OFF(Color(0xFF7A8087)),     // grey: off, ready
+    ARMED(Color(0xFFE8A33D)),   // amber: armed, waiting for the next key (a held ⌘)
+    DEAD(Color(0xFF33383E)),    // dark: cannot be done now (LOGIN with no password in the settings)
+}
+
 /**
- * An action over the full-screen picture, drawn like a subtitle (Marko, 25.10.2026): words only, no frame, no
- * background, no shadow, half transparent. The touch area is a thumb's size; only the letters show.
+ * A rail key as in Mantra Manual Camera: the word and nothing else, no box, no border; under it, when there is one, a
+ * whisper with the current value. Keys share their rail with equal weight; a long word shrinks, it is never clipped.
  */
 @Composable
-private fun Overlay(label: String, active: Boolean = false, onClick: () -> Unit) {
+private fun ColumnScope.RailKey(word: String, whisper: String?, state: RailState, onClick: () -> Unit) {
     val view = LocalView.current
-    Box(
+    Column(
         Modifier
-            .clickable { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() }
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) { T(label, Amber.copy(alpha = if (active) 0.8f else 0.4f), 11, bold = active) }
+            .weight(1f)
+            .fillMaxWidth()
+            .clickable(enabled = state != RailState.DEAD) {
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick()
+            },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        val size = if (word.length <= 5) 13 else (13 * 5 / word.length).coerceAtLeast(6)
+        androidx.compose.material3.Text(
+            word, color = state.color, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = size.sp,
+            letterSpacing = 0.04.em, maxLines = 1, softWrap = false,
+        )
+        if (whisper != null) androidx.compose.material3.Text(
+            whisper, color = state.color.copy(alpha = 150 / 255f), fontFamily = Mono, fontSize = 9.sp,
+            maxLines = 1, softWrap = false,
+        )
+    }
 }
 
 /**
