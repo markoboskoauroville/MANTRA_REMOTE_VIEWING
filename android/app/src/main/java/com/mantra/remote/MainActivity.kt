@@ -109,6 +109,53 @@ private val MONITORS = listOf(
 
 private const val PREFS = "remote"
 
+/** The key whose explanation is open (a long press on any key, Marko 25.10.2026), or null. */
+private val helpFor = mutableStateOf<String?>(null)
+
+/** What each key does, in a sentence or two. Found by the key's word, so every layout shares one text. */
+private fun helpText(label: String): String {
+    val l = label.uppercase()
+    return when {
+        l.startsWith("MON 1") -> "Shows monitor 1, the BenQ. Only this monitor's picture travels to the phone, so it costs less data than both."
+        l.startsWith("MON 2") -> "Shows monitor 2, the MacBook Pro's own screen. Only this monitor's picture travels to the phone."
+        l == "✕" -> "Closes the link to the Mac and goes back to the settings page."
+        l.contains("KEYS") -> "Opens the phone's keyboard. What you type is typed on the Mac."
+        l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
+        l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
+        l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
+        l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
+        l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
+        l.contains("FULL") -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
+        l == "EXIT" -> "Leaves full screen."
+        l == "⌘" -> "Command. Tap it, then a key or a letter: the two are pressed together (⌘ then Q quits an app). It turns off after one use."
+        l == "⌥" -> "Option. Tap it, then the next key: they are pressed together. It turns off after one use."
+        l == "⌃" || l == "^" -> "Control. Tap it, then the next key: they are pressed together. It turns off after one use."
+        l == "⇧" -> "Shift. Tap it, then the next key: they are pressed together. It turns off after one use."
+        l == "ESC" -> "Escape: closes a menu or a dialog, cancels."
+        l == "TAB" -> "Tab: the next field. With ⌘ first, it switches between apps."
+        l == "⏎" -> "Return: confirms, sends, a new line."
+        l == "⌫" -> "Delete: removes the letter before the cursor."
+        l == "←" || l == "→" || l == "↑" || l == "↓" -> "The arrow key, as on the Mac's keyboard."
+        l == "CONNECT" -> "Dials the Mac through Tailscale and logs in by itself with the user and password above."
+        else -> label
+    }
+}
+
+/** The explanation of the key that was long-pressed, in the app's own ink. A tap anywhere closes it. */
+@Composable
+private fun HelpPopup() {
+    val label = helpFor.value ?: return
+    Dialog(onDismissRequest = { helpFor.value = null }) {
+        Column(
+            Modifier.background(Bg).border(1.dp, Rule).clickable { helpFor.value = null }.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            T(label, Amber, 22, bold = true)
+            T(helpText(label), Color(0xFFF2DDB4), 16)
+        }
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -161,6 +208,7 @@ private fun App(prefs: android.content.SharedPreferences) {
             Phase.SETUP, Phase.CONNECTING -> Setup(prefs, session)
             Phase.LIVE -> Live(session)
         }
+        HelpPopup()
     }
 }
 
@@ -182,7 +230,7 @@ private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = 
             .background(if (active) Amber else BgRaised)
             .border(1.dp, if (active) AmberGlow else Rule)
             .combinedClickable(
-                onLongClick = onLongClick?.let { f -> { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); f() } },
+                onLongClick = { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); (onLongClick ?: { helpFor.value = label })() },
             ) { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() }
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center,
@@ -521,6 +569,7 @@ private fun Live(s: Session) {
     if (fpsMenu) Dialog(onDismissRequest = { fpsMenu = false }) {
         Column(Modifier.background(Bg).border(1.dp, Rule).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             T("── FRAMES PER SECOND ──", AmberDim, 13)
+            T("How often a new picture of the Mac is fetched. Fewer is cheaper on mobile data.", Color(0xFFF2DDB4), 13, modifier = Modifier.width(220.dp))
             FPS.forEachIndexed { i, (label, _) ->
                 Key("$label FPS", Modifier.width(220.dp), active = i == fpsIndex, size = 18) { fpsIndex = i; fpsMenu = false }
             }
@@ -611,9 +660,8 @@ private fun ColumnScope.RailKey(word: String, whisper: String?, state: RailState
             .weight(1f)
             .fillMaxWidth()
             .combinedClickable(
-                enabled = state != RailState.DEAD,
-                onLongClick = onLongClick?.let { f -> { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); f() } },
-            ) { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() },
+                onLongClick = { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); (onLongClick ?: { helpFor.value = word })() },
+            ) { if (state != RailState.DEAD) { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() } },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
