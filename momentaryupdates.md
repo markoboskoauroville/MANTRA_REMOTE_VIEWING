@@ -5,3 +5,9 @@
 > For the first time, we need to create an application for remote controlling the computer. There is a repository somewhere, so please find it and clone it. Check the code, and when I plug in the phone, we will have a Wi-Fi connection and an internet connection.
 > We are going to work only through the internet connection for testing purposes. I want to see if we can tunnel this phone to my computer from anywhere in the world with our application.
 > The application needs to support 2 monitors, with a simple switch between monitor 1 and monitor 2. It should work as a remote control for my computer, with a user interface adapted to the phone and finger use, so I can operate my computer from any distance.
+
+**25.10.2026 18:30, built while Marko was on his way home:** Android app v1 in `android/` (Kotlin, Compose, own RFB
+client: VNC password, ZRLE/Zlib/Hextile/CopyRect/Raw, two monitors as two rectangles of the framebuffer, frames asked
+only for the chosen monitor). Tested on the Pixel 7 emulator against `tools/fake_vnc.py` (password, MON 1/MON 2,
+tap lands at the right Mac coordinates, typing with Shift and Backspace). Waiting for Marko: Tailscale on the Mac
+(pkg in ~/Downloads/Tailscale), Screen Sharing with a VNC password, Tailscale app on the phone.
