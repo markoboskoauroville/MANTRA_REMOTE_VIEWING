@@ -330,6 +330,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         T("MANTRA REMOTE ▊", Amber, 34, bold = true)
+        T("v" + BuildConfig.VERSION_NAME, AmberDim, 13)          // the version the person sees (versioning.md §3)
         T("── THE MAC ───────────────────", Rule, 16)
         Field("HOST (TAILSCALE NAME OR 100.x.x.x)", host) { host = it.trim() }
         Field("PORT", port, number = true) { port = it.filter(Char::isDigit) }

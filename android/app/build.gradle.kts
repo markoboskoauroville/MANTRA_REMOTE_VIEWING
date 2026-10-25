@@ -23,6 +23,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    // the build names the APK from the one number (versioning.md §2, §6): 2-mantra-remote-v2.apk
+    applicationVariants.all {
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = "$appVersion-mantra-remote-v$appVersion.apk"
+        }
+    }
     buildFeatures {
         compose = true
         buildConfig = true
