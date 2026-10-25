@@ -122,7 +122,7 @@ private fun helpText(label: String): String {
         l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l == "FULL" || l == "65K" || l == "4096" || l == "512" || l == "64" || l == "8" || l == "B/W" || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
-        l.startsWith("CHROME") -> "The next Chrome tab (Control-Tab on the Mac). Tap again and again to go through the tabs; after the last one it starts at the first. Chrome must be the app in front. It works in VIEW ONLY too."
+        l.startsWith("NEXT") -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first. It works in VIEW ONLY too."
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
@@ -374,6 +374,7 @@ private const val K_CTRL = 0xffe3
 private const val K_SHIFT = 0xffe1
 private const val K_BACKSPACE = 0xff08
 private const val K_TAB = 0xff09
+private const val K_BRACERIGHT = 0x7d
 private const val K_RETURN = 0xff0d
 private const val K_ESC = 0xff1b
 private const val K_LEFT = 0xff51
@@ -459,11 +460,12 @@ private fun Live(s: Session) {
         if (m.isNotEmpty()) mods.value = emptySet()
     }
     fun tapKey(k: Int) = withMods { rfb.key(k, true); rfb.key(k, false) }
-    // CHROME ▶: Control-Tab, Chrome's next tab, whatever was armed (Marko, 25.10.2026: "go through the tabs")
+    // NEXT TAB ▶: ⌘⇧], the next tab in Chrome and in iTerm alike, so the phone need not know which app is in front
+    // (Marko, 25.10.2026: "go through the tabs", then "the same shortcut doesn't work in iTerm"). Ctrl-Tab was Chrome's only.
     fun nextTab() {
         mods.value = emptySet()
-        rfb.key(K_CTRL, true, always = true); rfb.key(K_TAB, true, always = true)
-        rfb.key(K_TAB, false, always = true); rfb.key(K_CTRL, false, always = true)
+        listOf(K_CMD, K_SHIFT, K_BRACERIGHT).forEach { rfb.key(it, true, always = true) }
+        listOf(K_BRACERIGHT, K_SHIFT, K_CMD).forEach { rfb.key(it, false, always = true) }
     }
 
     val activity = LocalContext.current as ComponentActivity
@@ -657,7 +659,7 @@ private fun Live(s: Session) {
         Key(if (s.landscape) "▯ PORTRAIT" else "▭ LANDSCAPE", modifier, size = 14) { s.landscape = !s.landscape }
         Key("⛶ FULL SCREEN", modifier, active = true, size = 14) { s.full = true }
         Key("VIEW ONLY", modifier, active = viewOnly, size = 14) { viewOnly = !viewOnly }
-        Key("CHROME ▶", modifier, size = 14) { nextTab() }
+        Key("NEXT TAB ▶", modifier, size = 14) { nextTab() }
     }
 
     // a long press on FPS: every rate at once, one tap chooses (Marko, 25.10.2026)
@@ -708,7 +710,7 @@ private fun Live(s: Session) {
                     RailKey("MON ${i + 1}", m.name.substringAfter(' '), if (monitor == i) RailState.ON else RailState.OFF) { monitor = i }
                 }
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
-                RailKey("CHROME", "NEXT TAB", RailState.OFF) { nextTab() }
+                RailKey("NEXT", "TAB", RailState.OFF) { nextTab() }
                 RailKey("SCROLL", null, if (scrollMode) RailState.ON else RailState.OFF) { scrollMode = !scrollMode }
                 RailKey("FPS", FPS[fpsIndex].first, RailState.OFF, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
                 RailKey("COL", colours.label, RailState.OFF, onLongClick = { coloursMenu = true }) {
