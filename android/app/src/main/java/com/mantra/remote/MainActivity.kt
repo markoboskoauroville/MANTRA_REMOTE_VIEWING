@@ -129,7 +129,7 @@ private fun helpText(label: String): String {
         l.contains("FULL") -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
         l == "EXIT" -> "Leaves full screen."
         l.startsWith("VIEW") -> "View only: you can watch, zoom and move around the picture, but nothing reaches the Mac: no click, no key, no scroll. One finger moves the zoomed picture. Tap again to control the Mac."
-        l == "⌘" -> "Command. Tap it, then a key or a letter: the two are pressed together (⌘ then Q quits an app). It turns off after one use."
+        l == "⌘" -> "Command, held down on the Mac while it is lit. Tap it on, then TAB, TAB, TAB walks the app switcher; tap it off to choose. ⌘ on, then Q, then ⌘ off quits an app."
         l == "⌥" -> "Option. Tap it, then the next key: they are pressed together. It turns off after one use."
         l == "⌃" || l == "^" -> "Control. Tap it, then the next key: they are pressed together. It turns off after one use."
         l == "⇧" -> "Shift. Tap it, then the next key: they are pressed together. It turns off after one use."
@@ -411,6 +411,7 @@ private fun Live(s: Session) {
     LaunchedEffect(rfb, viewOnly) { rfb.viewOnly = viewOnly; s.prefs?.edit()?.putBoolean("view_only", viewOnly)?.apply() }
     var keyboard by remember { mutableStateOf(false) }
     val mods = remember { mutableStateOf(setOf<Int>()) }
+    var cmdHeld by remember { mutableStateOf(false) }
     var rx by remember { mutableLongStateOf(0L) }
     var tx by remember { mutableLongStateOf(0L) }
     var kbps by remember { mutableLongStateOf(0L) }
@@ -461,10 +462,18 @@ private fun Live(s: Session) {
         if (m.isNotEmpty()) mods.value = emptySet()
     }
     fun tapKey(k: Int) = withMods { rfb.key(k, true); rfb.key(k, false) }
+    // ⌘ is a toggle held down on the Mac: on, it stays pressed there until tapped off, so ⌘ then TAB, TAB, TAB walks the
+    // app switcher and ⌘ off chooses (Marko, 25.10.2026: "make my Command key a toggle"). ⌥ ⌃ ⇧ stay one-shot.
+    fun toggleMod(k: Int) {
+        if (k == K_CMD) { cmdHeld = !cmdHeld; rfb.key(K_CMD, cmdHeld) }
+        else mods.value = if (k in mods.value) mods.value - k else mods.value + k
+    }
+    fun modOn(k: Int) = if (k == K_CMD) cmdHeld else k in mods.value
+    fun releaseCmd() { if (cmdHeld) { cmdHeld = false; rfb.key(K_CMD, false) } }
     // NEXT TAB ▶: ⌘⇧], the next tab in Chrome and in iTerm alike, so the phone need not know which app is in front
     // (Marko, 25.10.2026: "go through the tabs", then "the same shortcut doesn't work in iTerm"). Ctrl-Tab was Chrome's only.
     fun nextTab() {
-        mods.value = emptySet()
+        mods.value = emptySet(); cmdHeld = false
         listOf(K_CMD, K_SHIFT, K_BRACERIGHT).forEach { rfb.key(it, true, always = true) }
         listOf(K_BRACERIGHT, K_SHIFT, K_CMD).forEach { rfb.key(it, false, always = true) }
     }
@@ -619,9 +628,7 @@ private fun Live(s: Session) {
     }
     val modKeys: @Composable () -> Unit = {
         listOf("⌘" to K_CMD, "⌥" to K_OPT, "⌃" to K_CTRL, "⇧" to K_SHIFT).forEach { (label, k) ->
-            Key(label, Modifier.width(52.dp), active = k in mods.value, size = 22) {
-                mods.value = if (k in mods.value) mods.value - k else mods.value + k
-            }
+            Key(label, Modifier.width(52.dp), active = modOn(k), size = 22) { toggleMod(k) }
         }
     }
     val specialKeys = listOf("ESC" to K_ESC, "TAB" to K_TAB, "⏎" to K_RETURN, "⌫" to K_BACKSPACE,
@@ -650,7 +657,7 @@ private fun Live(s: Session) {
     // LOGIN: the Mac password from the settings, typed into whatever asks for it (lock screen, a dialog), then Return
     fun login() {
         if (s.loginPassword.isEmpty()) return
-        mods.value = emptySet()
+        mods.value = emptySet(); releaseCmd()
         typeText(s.loginPassword); tapKey(K_RETURN)
     }
     val typing: @Composable () -> Unit = {
@@ -702,9 +709,7 @@ private fun Live(s: Session) {
             Column(Modifier.width(76.dp).fillMaxHeight()) {
                 RailKey("LOGIN", null, if (s.loginPassword.isEmpty()) RailState.DEAD else RailState.OFF) { login() }
                 listOf("⌘" to K_CMD, "⇧" to K_SHIFT, "⌥" to K_OPT, "⌃" to K_CTRL).forEach { (label, k) ->
-                    RailKey(label, null, if (k in mods.value) RailState.ARMED else RailState.OFF) {
-                        mods.value = if (k in mods.value) mods.value - k else mods.value + k
-                    }
+                    RailKey(label, null, if (k == K_CMD && cmdHeld) RailState.ON else if (modOn(k)) RailState.ARMED else RailState.OFF) { toggleMod(k) }
                 }
                 RailKey("ESC", null, RailState.OFF) { tapKey(K_ESC) }
                 RailKey("TAB", null, RailState.OFF) { tapKey(K_TAB) }
