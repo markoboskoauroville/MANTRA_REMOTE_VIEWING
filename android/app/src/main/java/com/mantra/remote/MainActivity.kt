@@ -157,11 +157,42 @@ private fun HelpPopup() {
     }
 }
 
+/** The link outlives the window: a window Android rebuilt finds the same session, still connected. */
+private object Hold {
+    var session: Session? = null
+}
+
+/** In the background the picture comes at 0.2 FPS; in front, at what Marko chose (Marko, 25.10.2026). */
+private const val BACKGROUND_MS = 5000L
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { App(getSharedPreferences(PREFS, Context.MODE_PRIVATE)) }
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
+        val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val session = Hold.session ?: Session().also {
+            it.loginPassword = prefs.getString("login", "") ?: ""; it.prefs = prefs; it.app = applicationContext
+            Hold.session = it
+        }
+        setContent { App(prefs, session) }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val s = Hold.session ?: return
+        s.background = false
+        s.rfb?.let { it.minIntervalMs = s.fpsMs; it.wake() }
+        // the link fell while away (the network changed, the Mac slept): dial again by itself, no CONNECT needed
+        if (s.wanted && s.phase == Phase.SETUP) { s.phase = Phase.CONNECTING; s.status = "> DIAL AGAIN"; s.statusBad = false; s.dial(coloursSaved(s.prefs)) }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        val s = Hold.session ?: return
+        s.background = true
+        s.rfb?.minIntervalMs = BACKGROUND_MS
     }
 }
 
@@ -187,23 +218,38 @@ private class Session : Rfb.Listener {
     var loginPassword = ""
     var prefs: android.content.SharedPreferences? = null
     var landscape by mutableStateOf(false)
+    var app: Context? = null
+    /** The frame interval Marko chose; the background uses [BACKGROUND_MS] and comes back to this. */
+    var fpsMs = 1000L
+    var background = false
+    /** A link is wanted (CONNECT was pressed, ✕ not): a link that falls is dialled again on return. */
+    var wanted = false
+
+    /** ✕: the link is closed on purpose, nothing dials again and the background service ends. */
+    fun hangUp() {
+        wanted = false; rfb?.close(); app?.let(LinkService::stop)
+        phase = Phase.SETUP; status = "LINK CLOSED"; statusBad = false
+    }
 
     override fun onConnected(name: String, width: Int, height: Int) {
         android.util.Log.i("MantraRemote", "framebuffer ${width}x$height name '$name'")
         if (name.isNotEmpty()) this.name = name
         fbW = width; fbH = height
         phase = Phase.LIVE; status = "LINK ESTABLISHED"; statusBad = false
+        if (background) rfb?.minIntervalMs = BACKGROUND_MS
+        app?.let(LinkService::start)
     }
     override fun onFrame() { tick++ }
     override fun onClosed(reason: String) {
         phase = Phase.SETUP; status = reason.uppercase(); statusBad = true
+        // in front, the fall is shown; behind, the service stays and the link is dialled again on return
+        if (!background) app?.let(LinkService::stop)
     }
     override fun onStats(bytesIn: Long, frames: Long, lastFrameMs: Long) { this.frames = frames; lastMs = lastFrameMs }
 }
 
 @Composable
-private fun App(prefs: android.content.SharedPreferences) {
-    val session = remember { Session().also { it.loginPassword = prefs.getString("login", "") ?: ""; it.prefs = prefs } }
+private fun App(prefs: android.content.SharedPreferences, session: Session) {
     Box(
         Modifier
             .fillMaxSize()
@@ -287,7 +333,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
             prefs.edit().putString("host", host).putString("port", port).putString("password", password).putString("login", login).putString("user", user).apply()
             s.loginPassword = login
             s.phase = Phase.CONNECTING; s.status = "> DIAL $host:$port"; s.statusBad = false
-            s.rfb?.close(); s.rfb = null; s.baseRx = 0; s.baseTx = 0   // CONNECT starts a new session
+            s.rfb?.close(); s.rfb = null; s.baseRx = 0; s.baseTx = 0; s.wanted = true   // CONNECT starts a new session
             s.dial = { colours ->
                 s.rfb?.let { old -> old.close(); s.baseRx += old.rxBytes.get(); s.baseTx += old.txBytes.get() }
                 val rfb = Rfb(s, colours); s.rfb = rfb
@@ -372,7 +418,8 @@ private fun Live(s: Session) {
         rfb.setRegion(rect[0], rect[1], rect[2], rect[3]); zoom = 1f; pan = Offset.Zero
     }
     LaunchedEffect(rfb, fpsIndex) {
-        rfb.minIntervalMs = FPS[fpsIndex].second; rfb.wake()
+        s.fpsMs = FPS[fpsIndex].second
+        rfb.minIntervalMs = if (s.background) BACKGROUND_MS else s.fpsMs; rfb.wake()
         s.prefs?.edit()?.putString("fps_label", FPS[fpsIndex].first)?.apply()
     }
     LaunchedEffect(Unit) {
@@ -542,7 +589,7 @@ private fun Live(s: Session) {
         }
     }
     val close: @Composable () -> Unit = {
-        Key("✕", Modifier.width(56.dp)) { rfb.close(); s.phase = Phase.SETUP; s.status = "LINK CLOSED"; s.statusBad = false }
+        Key("✕", Modifier.width(56.dp)) { s.hangUp() }
     }
     val meter: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
