@@ -44,3 +44,4 @@ be made in the app (logged in as Marko), not with the VNC password.
 > It is happening, but the same shortcut doesn't work in iTerm. Can you make the button content-aware and do one shortcut in Chrome and another in iTerm?
 > Could you please remove the landscape button? Then there will be more space for the letters. Right now some letters break into two lines, and sometimes the second line is a symbol. That is not good. If possible, you need to make it one line, or reduce the text.
 > Make the swipe action go to another screen. Swipe left, right.
+> Please make my Command key a toggle, so it is either on or off. At the moment it goes off as soon as I lift my finger. When I press Command and Tab, it should open my task switcher and let me switch between tasks. Please test this with debugging. by the way, panning and scanning works, and zooming is great
