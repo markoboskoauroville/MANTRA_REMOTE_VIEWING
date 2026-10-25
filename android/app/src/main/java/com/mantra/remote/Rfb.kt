@@ -141,20 +141,32 @@ class Rfb(
     /** VIEW ONLY: nothing reaches the Mac, not a click, not a key (Marko, 25.10.2026). */
     @Volatile var viewOnly = false
 
-    fun pointer(x: Int, y: Int, buttons: Int) = if (viewOnly) Unit else send {
+    /**
+     * After a key or a click the picture comes fast for a moment, whatever the frame rate, so the answer is seen at once
+     * and not at the next 1 FPS frame (Marko, 25.10.2026: "I want any key pressed to be transferred immediately").
+     */
+    @Volatile private var burstUntil = 0L
+    private fun startBurst() {
+        burstUntil = System.currentTimeMillis() + BURST_MS
+        synchronized(requestLock) { requestLock.notifyAll() }
+    }
+
+    fun pointer(x: Int, y: Int, buttons: Int) = if (viewOnly) Unit else send(burst = true) {
         it.writeByte(5); it.writeByte(buttons)
         it.writeShort(x.coerceIn(0, (width - 1).coerceAtLeast(0)))
         it.writeShort(y.coerceIn(0, (height - 1).coerceAtLeast(0)))
     }
 
-    fun key(keysym: Int, down: Boolean) = if (viewOnly) Unit else send {
+    /** [always]: a key that passes even VIEW ONLY (CHROME ▶, the next tab, only changes what is watched). */
+    fun key(keysym: Int, down: Boolean, always: Boolean = false) = if (viewOnly && !always) Unit else send(burst = true) {
         it.writeByte(4); it.writeByte(if (down) 1 else 0); it.writeShort(0); it.writeInt(keysym)
     }
 
-    private fun send(block: (DataOutputStream) -> Unit) {
+    private fun send(burst: Boolean = false, block: (DataOutputStream) -> Unit) {
         if (!running) return
         writer.execute {
             runCatching { synchronized(output) { block(output); output.flush() } }
+            if (burst) startBurst()
         }
     }
 
@@ -234,6 +246,8 @@ class Rfb(
 
     /** Ask for the next frame of the region when the previous one has arrived and the interval has passed. */
     @Volatile private var awaitingFrame = false
+    private val BURST_MS = 2000L
+    private val BURST_INTERVAL_MS = 100L
     @Volatile private var lastRequest = 0L
 
     private fun requestLoop() {
@@ -242,7 +256,10 @@ class Rfb(
                 val wait = when {
                     frozen && !fullRequestPending -> 1000L
                     awaitingFrame && System.currentTimeMillis() - lastRequest < 5000 -> 1000L
-                    else -> (lastRequest + minIntervalMs - System.currentTimeMillis()).coerceAtLeast(0)
+                    else -> {
+                        val interval = if (System.currentTimeMillis() < burstUntil) minOf(minIntervalMs, BURST_INTERVAL_MS) else minIntervalMs
+                        (lastRequest + interval - System.currentTimeMillis()).coerceAtLeast(0)
+                    }
                 }
                 if (wait > 0) { requestLock.wait(wait); return@synchronized }
                 if (frozen && !fullRequestPending) return@synchronized
