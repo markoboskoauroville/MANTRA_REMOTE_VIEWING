@@ -11,3 +11,5 @@ client: VNC password, ZRLE/Zlib/Hextile/CopyRect/Raw, two monitors as two rectan
 only for the chosen monitor). Tested on the Pixel 7 emulator against `tools/fake_vnc.py` (password, MON 1/MON 2,
 tap lands at the right Mac coordinates, typing with Shift and Backspace). Waiting for Marko: Tailscale on the Mac
 (pkg in ~/Downloads/Tailscale), Screen Sharing with a VNC password, Tailscale app on the phone.
+
+> plugged in. Start testing. Adjust the testing in my Mac, and let's go
