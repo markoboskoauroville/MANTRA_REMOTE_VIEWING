@@ -25,3 +25,4 @@ AES-128, the Mac user and password from the settings), so macOS opens the deskto
 Tested over 4G through Tailscale on the Nothing Phone 2a: the BenQ desktop appeared at once.
 > please make gestures in my application for remote control: - Two fingers: spreading, pinching, zooming in and out. - Three fingers: moving, panning through the screen. - One finger: tapping, clicking with the mouse
 > remember frames per second of the screen between the restarts of the app, and one FPS is default
+> make a long press on FPS. Open the menu, and the user can directly switch. He doesn't need to go all around the scale. Long press FPS and add 0.2 FPS as well

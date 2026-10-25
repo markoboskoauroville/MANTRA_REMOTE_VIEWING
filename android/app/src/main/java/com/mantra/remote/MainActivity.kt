@@ -20,6 +20,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
@@ -169,15 +172,18 @@ private fun T(text: String, color: Color = Amber, size: Int = 16, bold: Boolean 
     )
 
 /** A finger-sized key: amber box line, label inside, lit while active. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = false, size: Int = 16, onClick: () -> Unit) {
+private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = false, size: Int = 16, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val view = LocalView.current
     Box(
         modifier
             .height(52.dp)
             .background(if (active) Amber else BgRaised)
             .border(1.dp, if (active) AmberGlow else Rule)
-            .clickable { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() }
+            .combinedClickable(
+                onLongClick = onLongClick?.let { f -> { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); f() } },
+            ) { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() }
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center,
     ) { T(label, if (active) Bg else Amber, size, bold = true) }
@@ -247,7 +253,7 @@ private fun monitorRect(i: Int, fbW: Int, fbH: Int): IntArray {
     return intArrayOf(m.x, m.y, m.w, m.h)
 }
 
-private val FPS = listOf("0.5" to 2000L, "1" to 1000L, "2" to 500L, "5" to 200L, "10" to 100L, "MAX" to 0L)
+private val FPS = listOf("0.2" to 5000L, "0.5" to 2000L, "1" to 1000L, "2" to 500L, "5" to 200L, "10" to 100L, "MAX" to 0L)
 
 // X11 keysyms as RFB wants them. Apple's server reads Super as Command and Alt as Option.
 private const val K_CMD = 0xffeb
@@ -268,7 +274,11 @@ private fun Live(s: Session) {
     val rfb = s.rfb ?: return
     var monitor by remember { mutableIntStateOf(0) }
     // the frame rate is remembered between restarts; 1 FPS when nothing was chosen yet (Marko, 25.10.2026)
-    var fpsIndex by remember { mutableIntStateOf((s.prefs?.getInt("fps", 1) ?: 1).coerceIn(0, FPS.size - 1)) }
+    var fpsIndex by remember {
+        val saved = s.prefs?.getString("fps_label", "1") ?: "1"
+        mutableIntStateOf(FPS.indexOfFirst { it.first == saved }.takeIf { it >= 0 } ?: FPS.indexOfFirst { it.first == "1" })
+    }
+    var fpsMenu by remember { mutableStateOf(false) }
     var zoom by remember { mutableStateOf(1f) }
     var pan by remember { mutableStateOf(Offset.Zero) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
@@ -288,7 +298,7 @@ private fun Live(s: Session) {
     }
     LaunchedEffect(fpsIndex) {
         rfb.minIntervalMs = FPS[fpsIndex].second; rfb.wake()
-        s.prefs?.edit()?.putInt("fps", fpsIndex)?.apply()
+        s.prefs?.edit()?.putString("fps_label", FPS[fpsIndex].first)?.apply()
     }
     LaunchedEffect(Unit) {
         var last = 0L
@@ -499,12 +509,22 @@ private fun Live(s: Session) {
     val toggles: @Composable (Modifier) -> Unit = { modifier ->
         Key("⌨ KEYS", modifier, active = keyboard) { keyboard = !keyboard }
         Key("SCROLL", modifier, active = scrollMode) { scrollMode = !scrollMode }
-        Key("${FPS[fpsIndex].first} FPS", modifier) { fpsIndex = (fpsIndex + 1) % FPS.size }
+        Key("${FPS[fpsIndex].first} FPS", modifier, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
         Key("LOGIN", modifier) { login() }
     }
     val views: @Composable (Modifier) -> Unit = { modifier ->
         Key(if (s.landscape) "▯ PORTRAIT" else "▭ LANDSCAPE", modifier) { s.landscape = !s.landscape }
         Key("⛶ FULL SCREEN", modifier, active = true) { s.full = true }
+    }
+
+    // a long press on FPS: every rate at once, one tap chooses (Marko, 25.10.2026)
+    if (fpsMenu) Dialog(onDismissRequest = { fpsMenu = false }) {
+        Column(Modifier.background(Bg).border(1.dp, Rule).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            T("── FRAMES PER SECOND ──", AmberDim, 13)
+            FPS.forEachIndexed { i, (label, _) ->
+                Key("$label FPS", Modifier.width(220.dp), active = i == fpsIndex, size = 18) { fpsIndex = i; fpsMenu = false }
+            }
+        }
     }
 
     when {
@@ -517,7 +537,7 @@ private fun Live(s: Session) {
                 }
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
                 RailKey("SCROLL", null, if (scrollMode) RailState.ON else RailState.OFF) { scrollMode = !scrollMode }
-                RailKey("FPS", FPS[fpsIndex].first, RailState.OFF) { fpsIndex = (fpsIndex + 1) % FPS.size }
+                RailKey("FPS", FPS[fpsIndex].first, RailState.OFF, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
                 RailKey("EXIT", "FULL", RailState.OFF) { s.full = false }
             }
             Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -582,16 +602,18 @@ private enum class RailState(val color: Color) {
  * A rail key as in Mantra Manual Camera: the word and nothing else, no box, no border; under it, when there is one, a
  * whisper with the current value. Keys share their rail with equal weight; a long word shrinks, it is never clipped.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ColumnScope.RailKey(word: String, whisper: String?, state: RailState, onClick: () -> Unit) {
+private fun ColumnScope.RailKey(word: String, whisper: String?, state: RailState, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val view = LocalView.current
     Column(
         Modifier
             .weight(1f)
             .fillMaxWidth()
-            .clickable(enabled = state != RailState.DEAD) {
-                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick()
-            },
+            .combinedClickable(
+                enabled = state != RailState.DEAD,
+                onLongClick = onLongClick?.let { f -> { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); f() } },
+            ) { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
