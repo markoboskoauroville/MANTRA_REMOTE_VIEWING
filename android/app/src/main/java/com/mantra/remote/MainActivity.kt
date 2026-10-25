@@ -115,7 +115,7 @@ private val helpFor = mutableStateOf<String?>(null)
 private fun helpText(label: String): String {
     val l = label.uppercase()
     return when {
-        l.startsWith("MON 1") -> "Shows monitor 1, the BenQ. Only this monitor's picture travels to the phone, so it costs less data than both."
+        l.startsWith("MON 1") -> "Shows monitor 1, the BenQ. Only this monitor's picture travels to the phone, so it costs less data than both. A quick swipe left or right on the picture switches too."
         l.startsWith("MON 2") -> "Shows monitor 2, the MacBook Pro's own screen. Only this monitor's picture travels to the phone."
         l == "✕" -> "Closes the link to the Mac and goes back to the settings page."
         l.contains("KEYS") -> "Opens the phone's keyboard. What you type is typed on the Mac."
@@ -535,6 +535,7 @@ private fun Live(s: Session) {
                         }
                         val c = pressed[0]
                         val p = c.position
+                        last = p
                         if (!moved && (p - start).getDistance() > 24f) moved = true
                         if (multi) { c.consume(); continue }
                         if (viewOnly) {
@@ -559,8 +560,16 @@ private fun Live(s: Session) {
                         } else if (moved) {
                             val (fx, fy) = toFb(p); rfb.pointer(fx, fy, if (dragging) 1 else 0)
                         }
-                        last = p
                         c.consume()
+                    }
+                    // a quick sideways swipe of one finger, the picture not zoomed: the other monitor, as they stand on
+                    // the desk: swipe left for the one on the right (MON 2), right for the one on the left (Marko, 25.10.2026)
+                    val dx = last.x - start.x; val dy = last.y - start.y
+                    val quick = System.currentTimeMillis() - t0 < 400
+                    if (!multi && !dragging && quick && zoom <= 1.01f && abs(dx) > 150f && abs(dx) > 2 * abs(dy)) {
+                        val next = (monitor + if (dx < 0) 1 else -1).coerceIn(0, MONITORS.size - 1)
+                        if (next != monitor) { view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK); monitor = next }
+                        return@awaitEachGesture
                     }
                     if (multi || scrollMode || viewOnly) return@awaitEachGesture
                     val (fx, fy) = toFb(last)
