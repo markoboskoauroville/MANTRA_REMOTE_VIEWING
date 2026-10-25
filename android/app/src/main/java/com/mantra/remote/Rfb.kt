@@ -138,13 +138,16 @@ class Rfb(
 
     // ---------------------------------------------------------------- input, sent from the UI thread
 
-    fun pointer(x: Int, y: Int, buttons: Int) = send {
+    /** VIEW ONLY: nothing reaches the Mac, not a click, not a key (Marko, 25.10.2026). */
+    @Volatile var viewOnly = false
+
+    fun pointer(x: Int, y: Int, buttons: Int) = if (viewOnly) Unit else send {
         it.writeByte(5); it.writeByte(buttons)
         it.writeShort(x.coerceIn(0, (width - 1).coerceAtLeast(0)))
         it.writeShort(y.coerceIn(0, (height - 1).coerceAtLeast(0)))
     }
 
-    fun key(keysym: Int, down: Boolean) = send {
+    fun key(keysym: Int, down: Boolean) = if (viewOnly) Unit else send {
         it.writeByte(4); it.writeByte(if (down) 1 else 0); it.writeShort(0); it.writeInt(keysym)
     }
 

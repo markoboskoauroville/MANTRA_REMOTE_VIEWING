@@ -127,6 +127,7 @@ private fun helpText(label: String): String {
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
         l.contains("FULL") -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
         l == "EXIT" -> "Leaves full screen."
+        l.startsWith("VIEW") -> "View only: you can watch, zoom and move around the picture, but nothing reaches the Mac: no click, no key, no scroll. One finger moves the zoomed picture. Tap again to control the Mac."
         l == "⌘" -> "Command. Tap it, then a key or a letter: the two are pressed together (⌘ then Q quits an app). It turns off after one use."
         l == "⌥" -> "Option. Tap it, then the next key: they are pressed together. It turns off after one use."
         l == "⌃" || l == "^" -> "Control. Tap it, then the next key: they are pressed together. It turns off after one use."
@@ -356,6 +357,9 @@ private fun Live(s: Session) {
     var pan by remember { mutableStateOf(Offset.Zero) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     var scrollMode by remember { mutableStateOf(false) }
+    // VIEW ONLY is remembered like FPS: watching stays watching after a restart
+    var viewOnly by remember { mutableStateOf(s.prefs?.getBoolean("view_only", false) ?: false) }
+    LaunchedEffect(rfb, viewOnly) { rfb.viewOnly = viewOnly; s.prefs?.edit()?.putBoolean("view_only", viewOnly)?.apply() }
     var keyboard by remember { mutableStateOf(false) }
     val mods = remember { mutableStateOf(setOf<Int>()) }
     var rx by remember { mutableLongStateOf(0L) }
@@ -432,7 +436,7 @@ private fun Live(s: Session) {
         modifier
             .background(Color.Black)
             .onSizeChanged { viewSize = it }
-            .pointerInput(rect.contentHashCode(), scrollMode) {
+            .pointerInput(rect.contentHashCode(), scrollMode, viewOnly) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     val start = down.position
@@ -476,6 +480,11 @@ private fun Live(s: Session) {
                         val p = c.position
                         if (!moved && (p - start).getDistance() > 24f) moved = true
                         if (multi) { c.consume(); continue }
+                        if (viewOnly) {
+                            // watching only: one finger moves the zoomed picture, nothing goes to the Mac
+                            pan = clampPan(pan + c.positionChange())
+                            c.consume(); continue
+                        }
                         if (scrollMode) {
                             // one finger in SCROLL: up and down turn the Mac's wheel
                             scrollAcc += c.positionChange().y
@@ -496,7 +505,7 @@ private fun Live(s: Session) {
                         last = p
                         c.consume()
                     }
-                    if (multi || scrollMode) return@awaitEachGesture
+                    if (multi || scrollMode || viewOnly) return@awaitEachGesture
                     val (fx, fy) = toFb(last)
                     when {
                         dragging && !moved -> { rfb.pointer(fx, fy, 0); rfb.pointer(fx, fy, 4); rfb.pointer(fx, fy, 0) } // long press = right click
@@ -591,8 +600,9 @@ private fun Live(s: Session) {
         Key("LOGIN", modifier, size = 14) { login() }
     }
     val views: @Composable (Modifier) -> Unit = { modifier ->
-        Key(if (s.landscape) "▯ PORTRAIT" else "▭ LANDSCAPE", modifier) { s.landscape = !s.landscape }
-        Key("⛶ FULL SCREEN", modifier, active = true) { s.full = true }
+        Key(if (s.landscape) "▯ PORTRAIT" else "▭ LANDSCAPE", modifier, size = 14) { s.landscape = !s.landscape }
+        Key("⛶ FULL SCREEN", modifier, active = true, size = 14) { s.full = true }
+        Key("VIEW ONLY", modifier, active = viewOnly, size = 14) { viewOnly = !viewOnly }
     }
 
     // a long press on FPS: every rate at once, one tap chooses (Marko, 25.10.2026)
@@ -632,6 +642,7 @@ private fun Live(s: Session) {
                 RailKey("COL", colours.label, RailState.OFF, onLongClick = { coloursMenu = true }) {
                     setColours(Colours.ALL[(Colours.ALL.indexOfFirst { it.label == colours.label } + 1) % Colours.ALL.size])
                 }
+                RailKey("VIEW", "ONLY", if (viewOnly) RailState.ON else RailState.OFF) { viewOnly = !viewOnly }
                 RailKey("EXIT", "FULL", RailState.OFF) { s.full = false }
             }
             Box(Modifier.weight(1f).fillMaxHeight()) {

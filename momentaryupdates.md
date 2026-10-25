@@ -35,3 +35,5 @@ Tested over 4G through Tailscale on the Nothing Phone 2a: the BenQ desktop appea
 512 226, 64 177, 8 159, B/W about 160. Apple's server takes only 32 bit and 16 bit 5-6-5 pixels (it closes the link on
 any 8 bit format); fewer steps inside 32 bits work. A VNC-password session sees only the lock screen, so measurements must
 be made in the app (logged in as Marko), not with the VNC password.
+> panning and scanning image still not work. Please build this three-finger gesture,
+> I'm going now on Wi-Fi debugging. Please fix my application. We need to have a button which blocks all the clicks, only watching. It will be watching only, so I can zoom in and scroll, but I cannot click. I can zoom and scroll in the picture, not on the real Mac. So it will be a view-only button
