@@ -1,9 +1,9 @@
-# TAKEOVER: Mantra Remote (Android), state 26.10.2026, v9
+# TAKEOVER: Mantra Remote (Android), state 26.10.2026, v10
 
 **What it is.** An Android app (Kotlin + Compose, `android/`, package `com.mantra.remote`) that controls Marko's Mac from his
 Nothing Phone 2a over the internet. Tailscale carries it (Mac 100.79.251.19, phone 100.67.149.40); the Mac side is Apple
 Screen Sharing on port 5900. The RFB client is our own (`Rfb.kt`): ARD auth (type 30) logs in as the Mac user and shows
-the real desktop (type 2, the VNC password, only sees the lock screen). Release: v9 on GitHub, built on the Mac.
+the real desktop (type 2, the VNC password, only sees the lock screen). Release: v10 on GitHub, built on the Mac.
 
 **Files.**
 - `android/app/src/main/java/com/mantra/remote/Rfb.kt`: the protocol, the encodings (ZRLE, Zlib, Hextile, CopyRect, Raw,
@@ -37,7 +37,11 @@ KEYS, SCROLL, FPS (long press: list), colours (long press: list), LOGIN; ⛶ FUL
 Chrome and iTerm, works in VIEW ONLY). Gestures: 1 finger mouse (tap click, long press drag / right click), 2 zoom, 3 pan.
 
 **Open (next session).**
-0. v9 (26.10.2026): ☰ (last row) = MENU mode: the three key rows become ESC ↑ ☰OPEN / ← ↓ → / ⏎CHOOSE ✕EXIT;
+0. v10 (26.10.2026): MON 1 / MON 2 / ✕ gone from the top (⇄ switches); the meter alone at the top, fixed-width
+   numbers (no jitter), switchable (pref `meter_on`); second row SCROLL | ⌨ | LOGIN | ⚙; ⚙ = the meter with its meaning,
+   FPS and colours as rows of choices, METER ON THE SCREEN, BACK, ✕ QUIT (hangUp + finish: quitting is ⚙ then ✕).
+   The full-screen rails still carry MON, FPS, COL. Seen on the phone.
+   v9 (26.10.2026): ☰ (last row) = MENU mode: the three key rows become ESC ↑ ☰OPEN / ← ↓ → / ⏎CHOOSE ✕EXIT;
    ☰ asks Dock Switcher v7 `/menu` (AXPress on the front app's menu, menu bar shown even hidden), EXIT `/menuclose`
    (AXCancel), never ESC. Proven on the phone: iTerm2 menu opened, → Shell, ↓ New Window, EXIT closed, keys back.
    Portrait only; the full-screen rails have no MENU yet.

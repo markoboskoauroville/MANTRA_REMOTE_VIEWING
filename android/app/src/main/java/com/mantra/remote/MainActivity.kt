@@ -903,11 +903,11 @@ private fun Live(s: Session) {
         Column(Modifier.background(Bg).border(1.dp, Rule).padding(14.dp).width(300.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             T("── SETTINGS ──", AmberDim, 13)
             val (vnc, speed, ms) = meterTexts()
-            T(vnc.trim(), Cyan, 14, oneLine = true)
+            T(vnc, Cyan, 14, oneLine = true)   // padded, never trimmed: the digits stand still
             T("The picture and the keys of this link: all of it, ↓ from the Mac (the pictures), ↑ to the Mac (keys, clicks).", Color(0xFFF2DDB4), 12)
-            T(speed.trim(), Cyan, 14, oneLine = true)
+            T(speed, Cyan, 14, oneLine = true)   // padded, never trimmed: the digits stand still
             T("How fast it flows now, every second.", Color(0xFFF2DDB4), 12)
-            T(ms.trim(), Cyan, 14, oneLine = true)
+            T(ms, Cyan, 14, oneLine = true)   // padded, never trimmed: the digits stand still
             T("How long the last picture took to come after it was asked for.", Color(0xFFF2DDB4), 12)
             T("FRAMES PER SECOND: fewer cost less data", AmberDim, 12)
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
