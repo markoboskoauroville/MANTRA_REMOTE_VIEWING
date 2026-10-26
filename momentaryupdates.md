@@ -116,3 +116,7 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 - Press feedback on every key of Mantra Remote (Computer Remote), the keyboard keys and every other button: a short vibration and a visible flash, so he knows the press was taken. — **Status:** v15 (26.10.2026): Marko's spec "the symbol ... needs to change color to white for half a second": every Key and every rail key turns its symbol (and its frame) white for 500 ms on a tap or a long press, beside the haptic tick it already had. Tested on the Nothing: SCROLL white in the capture right after the tap, amber again 1 s later. The dock icons are the only buttons without it (the dock closes on a pick).
 
 > "When I press a button, the symbol on the Mantra remote needs to change color to white for half a second, so I know I pressed it." (Marko, 26.10.2026)
+
+> "Also, in the Mantra remote control settings, I want to see all the available devices I can connect to. You also need to enable the Pixel 7 phone, so I can control my computer or the Pixel 7 from my own one app, switching between them." (Marko, 26.10.2026)
+
+- Computer Remote: settings list every device it can reach (the Mac, the Pixel 7, more when found), and the Pixel 7 is driven from the same app (its screen and every touch, as the Camera Remote does over ADB and the tunnel); switching between the Mac and the Pixel in one place. — **Status:** asked.
