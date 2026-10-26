@@ -789,7 +789,7 @@ private fun Live(s: Session) {
         // LANDSCAPE left the row (Marko, 25.10.2026: "more space for the letters"); FULL SCREEN is the sideways view.
         // ⛶ alone, without its word, and ⇄ beside TAB ▶ switches BenQ / MacBook (Marko, 26.10.2026); widths by their words
         Key("⛶", Modifier.weight(0.6f), active = true, size = 22) { s.full = true }
-        Key("VIEW ONLY", Modifier.weight(1.6f), active = viewOnly, size = 14) { viewOnly = !viewOnly }
+        Key("VIEW", Modifier.weight(1f), active = viewOnly, size = 14) { viewOnly = !viewOnly }   // lit = view only (Marko, 26.10.2026)
         Key("TAB ▶", Modifier.weight(1.1f), size = 14) { nextTab() }
         Key("⇄", Modifier.weight(0.7f), size = 22, sub = if (monitor == 0) "BENQ" else "MACBOOK", padH = 2) { monitor = 1 - monitor }
         Key("DOCK", Modifier.weight(1f), size = 14) { dock() }

@@ -1,9 +1,9 @@
-# TAKEOVER: Mantra Remote (Android), state 26.10.2026, v6
+# TAKEOVER: Mantra Remote (Android), state 26.10.2026, v7
 
 **What it is.** An Android app (Kotlin + Compose, `android/`, package `com.mantra.remote`) that controls Marko's Mac from his
 Nothing Phone 2a over the internet. Tailscale carries it (Mac 100.79.251.19, phone 100.67.149.40); the Mac side is Apple
 Screen Sharing on port 5900. The RFB client is our own (`Rfb.kt`): ARD auth (type 30) logs in as the Mac user and shows
-the real desktop (type 2, the VNC password, only sees the lock screen). Release: v6 on GitHub, built on the Mac.
+the real desktop (type 2, the VNC password, only sees the lock screen). Release: v7 on GitHub, built on the Mac.
 
 **Files.**
 - `android/app/src/main/java/com/mantra/remote/Rfb.kt`: the protocol, the encodings (ZRLE, Zlib, Hextile, CopyRect, Raw,
@@ -37,7 +37,8 @@ KEYS, SCROLL, FPS (long press: list), colours (long press: list), LOGIN; ⛶ FUL
 Chrome and iTerm, works in VIEW ONLY). Gestures: 1 finger mouse (tap click, long press drag / right click), 2 zoom, 3 pan.
 
 **Open (next session).**
-0. v6 (26.10.2026): (a) the line above the keys shows what is travelling ("ESC  →  MAC"), gone when it landed, red
+0. v7 (26.10.2026): last row ⛶ | VIEW | TAB ▶ | ⇄ (BENQ/MACBOOK under it) | DOCK, widths by weight. Seen on the phone.
+   v6 (26.10.2026): (a) the line above the keys shows what is travelling ("ESC  →  MAC"), gone when it landed, red
    "NOT LANDED YET" after 3 s; landing is proven by `Rfb.probe()`: a whole 1x1 request at (0,0) after the keys, the Mac
    answers in order (log "landed: … in N ms", 76 ms at home). In full screen the line sits at the top of the picture.
    (b) MacFinder tries the home Wi-Fi first (Bonjour + lan_host), the tunnel only after 3 s of silence there: at home it
