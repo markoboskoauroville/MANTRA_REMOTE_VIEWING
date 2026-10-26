@@ -826,7 +826,7 @@ private fun Live(s: Session) {
     }
     // the meter's numbers always take the same width, so no digit runs left and right as they change (Marko, 26.10.2026)
     val meterTexts = { listOf(
-        "VNC %7.2f MB  ↓%7.2f ↑%5.2f".format((rx + tx) / 1e6, rx / 1e6, tx / 1e6),
+        "VNC %6.2f MB ↓%6.2f ↑%5.2f".format((rx + tx) / 1e6, rx / 1e6, tx / 1e6),
         "%6d kbit/s".format(kbps),
         "%5d ms".format(s.lastMs.coerceIn(0, 99999)),
     ) }
@@ -883,7 +883,7 @@ private fun Live(s: Session) {
         Key("${FPS[fpsIndex].first} FPS", modifier, size = 14, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
         Key("SCROLL", modifier, active = scrollMode, size = 14) { scrollMode = !scrollMode }
         Key("⌨", modifier, active = keyboard, size = 26) { keyboard = !keyboard }
-        Key("C" + colours.label.let { if (it[0].isDigit()) it else " $it" }, modifier, size = 14, onLongClick = { coloursMenu = true }) {
+        Key("C" + colours.label.let { if (it[0].isDigit()) it else " $it" }, Modifier.weight(0.75f), size = 14, padH = 4, onLongClick = { coloursMenu = true }) {
             setColours(Colours.ALL[(Colours.ALL.indexOfFirst { it.label == colours.label } + 1) % Colours.ALL.size])
         }
         Key("LOGIN", modifier, size = 14) { login() }
