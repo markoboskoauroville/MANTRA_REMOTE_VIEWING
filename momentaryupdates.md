@@ -88,3 +88,5 @@ buttons gone, the meter steady (fixed widths, ms averaged, 065 ms), switchable i
 explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 > now all the status numbers in settings align to the left edge same alignment for every number
 > please in settings swap the button placement for quit and app and exit this menu
+
+**Status, 26.10.2026 06:50:** both done in v12, seen on the phone.

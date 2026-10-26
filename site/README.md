@@ -1,7 +1,7 @@
 # The page: mantraremote.pages.dev (not deployed yet)
 
 Written 26.10.2026 at the close of the session (close-the-session.md step 5): Candle language, the three phone
-screenshots (main, DOCK, ☰ MENU) from the Nothing Phone 2a, version 11, the download counter (`data-dl-app="mantraremote"`),
+screenshots (main, DOCK, ☰ MENU) from the Nothing Phone 2a, version 12, the download counter (`data-dl-app="mantraremote"`),
 the Speechify keys line, the donation bowl (copied from mantrasonyremote).
 
 **Not deployed:** creating a new public Cloudflare Pages project was stopped by Claude Code's permission check, and the

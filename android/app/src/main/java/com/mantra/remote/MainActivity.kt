@@ -930,8 +930,9 @@ private fun Live(s: Session) {
                 showMeter = !showMeter; s.prefs?.edit()?.putBoolean("meter_on", showMeter)?.apply()
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Key("BACK", Modifier.weight(1f), size = 14) { settingsOpen = false }
+                // QUIT APP on the left, BACK (leaves ⚙) on the right (Marko, 26.10.2026)
                 Key("✕ QUIT APP", Modifier.weight(1f), size = 14) { settingsOpen = false; s.hangUp(); activity.finish() }
+                Key("BACK", Modifier.weight(1f), size = 14) { settingsOpen = false }
             }
         }
     }
