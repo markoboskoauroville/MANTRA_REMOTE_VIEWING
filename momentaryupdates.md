@@ -81,3 +81,4 @@ Accessibility. Not tried: away from home on 4G. The page in `site/` is written b
 > in the settings, the title of the setting should be aligned to the middle. Align middle, please, and in other menus also align middle
 > there is too much numbers of this sending. Please average it and slowly change the number milliseconds and also make three digits fixed. They are not changing places
 > please add three zeros as a placeholder for the numbers of milliseconds
+> in the settings and the quit, you can just put "Quit App," so people don't think it's quitting the menu itself

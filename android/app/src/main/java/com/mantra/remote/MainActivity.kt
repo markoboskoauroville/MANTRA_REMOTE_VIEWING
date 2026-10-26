@@ -834,7 +834,7 @@ private fun Live(s: Session) {
     val meterTexts = { listOf(
         "VNC %6.2f MB ↓%6.2f ↑%5.2f".format((rx + tx) / 1e6, rx / 1e6, tx / 1e6),
         "%6d kbit/s".format(kbps),
-        "%3d ms".format(s.lastMs.coerceIn(0, 999)),           // three digits, always in their places
+        "%03d ms".format(s.lastMs.coerceIn(0, 999)),          // three digits, zeros in front: 050 ms (Marko, 26.10.2026)
     ) }
     val meter: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
