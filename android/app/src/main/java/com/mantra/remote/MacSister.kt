@@ -48,6 +48,22 @@ object MacSister {
     /** Every open menu closed (AXCancel), so EXIT never needs an ESC that could land in the app. */
     fun menuClose(host: String): Boolean = get(host, "/menuclose", 3000) != null
 
+    /**
+     * v16 (Marko, 26.10.2026: "Yes, build that"): the phone of that name on the Mac's USB cable unlocked by the Mac
+     * with its PIN, its adb on 5555 armed again. The PIN goes in the body (through Tailscale), never in the address.
+     * (ok, the Mac's words), or null when the Mac does not answer.
+     */
+    fun unlockPhone(host: String, name: String, pin: String): Pair<Boolean, String>? = runCatching {
+        val c = URL("http://$host:$PORT/unlock").openConnection() as HttpURLConnection
+        c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 4000; c.readTimeout = 15000
+        c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        val body = "name=" + URLEncoder.encode(name, "UTF-8") + "&pin=" + URLEncoder.encode(pin, "UTF-8")
+        c.outputStream.use { it.write(body.toByteArray()) }
+        val text = (if (c.responseCode < 400) c.inputStream else c.errorStream).use { String(it.readBytes()) }
+        val j = JSONObject(text)
+        j.optBoolean("ok") to j.optString("note")
+    }.getOrNull()
+
     /** Switch to the app, or start it: true when the Mac did it. */
     fun open(host: String, id: String): Boolean = get(host, "/open?id=" + URLEncoder.encode(id, "UTF-8"), 4000) != null
 }

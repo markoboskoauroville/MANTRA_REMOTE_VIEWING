@@ -131,4 +131,4 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 
 > "Yes, build that." (Marko, 26.10.2026, about the Mac typing the PIN over its USB cable when the phone cannot be reached after a restart; he also gave the PIN for testing: not used by Claude, a device PIN is his to type)
 
-- The Mac as the way in: when a phone does not answer, Computer Remote asks the Mac (its helper on 8861), which types the PIN into the phone over USB adb. — **Status:** in work.
+- The Mac as the way in: when a phone does not answer, Computer Remote asks the Mac (its helper on 8861), which types the PIN into the phone over USB adb. — **Status:** v16 + Dock Switcher v8: after two misses, with a PIN saved, the phone screen asks the Mac (POST 100.79.251.19:8861/unlock, the PIN in the body) at most once a minute; the Mac unlocks the phone on its cable and arms adb 5555 again, then the link connects through Tailscale. The status line says each step. Tested up to the Mac's answer without a PIN; the real unlock waits for Marko to type the PIN in the app.

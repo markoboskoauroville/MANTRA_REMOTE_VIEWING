@@ -80,6 +80,8 @@ fun PhoneScreen(phone: Phone, pin: String = "", onMac: () -> Unit) {
     var px by remember { mutableStateOf(0.5f) }
     var py by remember { mutableStateOf(0.5f) }
     var held by remember { mutableStateOf(false) }
+    var misses by remember { mutableIntStateOf(0) }
+    var macAskedAt by remember { mutableStateOf(0L) }
     androidx.activity.compose.BackHandler { link?.key("BACK") }
 
     DisposableEffect(phone.address) { onDispose { link?.stop(); link = null } }
@@ -131,10 +133,29 @@ fun PhoneScreen(phone: Phone, pin: String = "", onMac: () -> Unit) {
                                 val a = AdbLink(context.applicationContext, { host to port }, Surface(t),
                                     // v16 (Marko, 26.10.2026: "I'm not able to connect to my Pixel phone ... There is some
                                     // problem"): a phone that does not answer is said in words, with what to do
-                                    onStatus = { msg -> post { status = if (msg.contains("failed to connect") || msg.contains("did not answer"))
+                                    onStatus = { msg -> post {
+                                        val gone = msg.contains("failed to connect") || msg.contains("did not answer")
+                                        status = if (gone)
                                         "${phone.name} DOES NOT ANSWER AT ${phone.address}. Locked since a restart (Tailscale starts only after " +
                                         "the first unlock), Tailscale off, or adb not on 5555 (adb tcpip 5555 from the Mac). Trying again…"
-                                        else "${phone.name}: $msg" } },
+                                        else "${phone.name}: $msg"
+                                        // v16: two misses and a PIN known: the Mac, which holds the phone on its cable, unlocks
+                                        // it and arms 5555 again (at most once a minute)
+                                        if (gone) misses++
+                                        val now = System.currentTimeMillis()
+                                        if (gone && misses >= 2 && pin.isNotEmpty() && now - macAskedAt > 60_000) {
+                                            macAskedAt = now
+                                            status = "${phone.name} DOES NOT ANSWER: ASKING THE MAC TO UNLOCK IT OVER ITS CABLE…"
+                                            Thread {
+                                                val r = MacSister.unlockPhone(MacFinder.MAC_TAILSCALE_IP, phone.name, pin)
+                                                post { status = when {
+                                                    r == null -> "${phone.name}: THE MAC DOES NOT ANSWER (Dock Switcher on port ${MacSister.PORT})"
+                                                    r.first -> "THE MAC: ${r.second.uppercase()}. CONNECTING…"
+                                                    else -> "THE MAC: ${r.second.uppercase()}"
+                                                } }
+                                            }.start()
+                                        }
+                                    } },
                                     onSize = { nw, nh -> post { w = nw; h = nh } },
                                     onPairingNeeded = { post { status = "${phone.name}: allow this phone on the ${phone.name} (\"Allow USB debugging?\" → Always)" } },
                                     // the light picture of the Camera Remote on mobile data, enough to drive a phone
