@@ -61,3 +61,5 @@ be made in the app (logged in as Marko), not with the VNC password.
 > Another optimization is that the connection checks whether I'm on the local network. If my computer is on the local network, you don't tunnel, you use the local area network. If I'm not on my local area network, then you use the tunnel VPN.
 > next to the tab icon, i need an icon to switch between screens, the benq and the macbook pro To optimize space in the last row, full screen can be only a symbol. Remove the word "full".
 > It should fill up my screen real estate on my phone with the same functions. Then I pick switching or starting, and that's it. It acts the same, but you need to make a special sister app for my dock, which runs from this user interface, please.
+> View only can be a toggle. The two words are toggling, so it is either view. Actually, you can put only "view". Only remove.
+> And for the dock, we need a local dock, emulating the real one. Basically, you need to build a remote controller for my dock, so I'm not waiting for the dock and trying to find it on screen.

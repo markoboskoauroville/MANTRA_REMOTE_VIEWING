@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -127,7 +128,8 @@ private fun helpText(label: String): String {
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
-        l.contains("FULL") -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
+        l == "⇄" -> "Switches the picture between the two screens: the BenQ and the MacBook Pro. The small word under it is the screen you are watching now."
+        l.contains("FULL") || l == "⛶" -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
         l == "EXIT" -> "Leaves full screen."
         l.startsWith("VIEW") -> "View only: the mouse does not reach the Mac: no click, no drag, no scroll. You can watch, zoom and move around the picture; one finger moves the zoomed picture. The keys still work: ESC, DOCK, TAB ▶, typing, every key. Tap again to use the mouse on the Mac."
         l == "⌘" -> "Command, held down on the Mac while it is lit. Tap it on, then TAB, TAB, TAB walks the app switcher; tap it off to choose. ⌘ on, then Q, then ⌘ off quits an app."
@@ -783,12 +785,14 @@ private fun Live(s: Session) {
         }
         Key("LOGIN", modifier, size = 14) { login() }
     }
-    val views: @Composable (Modifier) -> Unit = { modifier ->
-        // LANDSCAPE left the row (Marko, 25.10.2026: "more space for the letters"); FULL SCREEN is the sideways view
-        Key("⛶ FULL", modifier, active = true, size = 14) { s.full = true }
-        Key("VIEW ONLY", modifier, active = viewOnly, size = 14) { viewOnly = !viewOnly }
-        Key("TAB ▶", modifier, size = 14) { nextTab() }
-        Key("DOCK", modifier, size = 14) { dock() }
+    val views: @Composable RowScope.() -> Unit = {
+        // LANDSCAPE left the row (Marko, 25.10.2026: "more space for the letters"); FULL SCREEN is the sideways view.
+        // ⛶ alone, without its word, and ⇄ beside TAB ▶ switches BenQ / MacBook (Marko, 26.10.2026); widths by their words
+        Key("⛶", Modifier.weight(0.6f), active = true, size = 22) { s.full = true }
+        Key("VIEW ONLY", Modifier.weight(1.6f), active = viewOnly, size = 14) { viewOnly = !viewOnly }
+        Key("TAB ▶", Modifier.weight(1.1f), size = 14) { nextTab() }
+        Key("⇄", Modifier.weight(0.7f), size = 22, sub = if (monitor == 0) "BENQ" else "MACBOOK", padH = 2) { monitor = 1 - monitor }
+        Key("DOCK", Modifier.weight(1f), size = 14) { dock() }
     }
 
     // a long press on FPS: every rate at once, one tap chooses (Marko, 25.10.2026)
@@ -864,7 +868,7 @@ private fun Live(s: Session) {
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { toggles(Modifier.weight(1f)) }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { views(Modifier.weight(1f)) }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { views() }
                 typing()
             }
         }
@@ -877,7 +881,7 @@ private fun Live(s: Session) {
             travelLine(Modifier.fillMaxWidth())
             keysRow()
             Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { toggles(Modifier.weight(1f)) }
-            Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { views(Modifier.weight(1f)) }
+            Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { views() }
             typing()
         }
     }
