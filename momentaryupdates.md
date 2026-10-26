@@ -110,3 +110,7 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 > "I need the same feature on my other app which allows me to remotely access my phone. Not the camera app, the other app. It's running on this phone." (Marko, 26.10.2026 — the same feature: "resolution scaling, in fractions of 0.9, 0.8, 0.7, 0.6 and 0.5. It saves bandwidth with the new setting, and the status line shows the new number.")
 
 - Resolution scaling in Mantra Remote: 1.0, 0.9, 0.8, 0.7, 0.6, 0.5 of the picture; less bandwidth; the status line shows the scale. — **Status:** asked.
+
+> "Please add a new feature to Mantra remote. I need feedback so I know I actually pressed the button, on this keyboard and on any button." (Marko, 26.10.2026)
+
+- Press feedback on every key of Mantra Remote (Computer Remote), the keyboard keys and every other button: a short vibration and a visible flash, so he knows the press was taken. — **Status:** asked.
