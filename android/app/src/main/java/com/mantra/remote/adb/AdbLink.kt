@@ -263,10 +263,25 @@ class AdbLink(
         send(msgs)
     }
 
-    /** BACK, as a key on the camera phone. */
+    /** BACK, as a key on the camera phone; v16 (Computer Remote): ENTER, DEL (backspace), APPS too. */
     fun key(name: String) {
-        val code = when (name) { "BACK" -> 4; "HOME" -> 3; else -> return }
+        val code = when (name) { "BACK" -> 4; "HOME" -> 3; "ENTER" -> 66; "DEL" -> 67; "APPS" -> 187; else -> return }
         send(listOf(keyMessage(0, code), keyMessage(1, code)))
+    }
+
+    /** v16: text typed on this phone, into the field in focus there (scrcpy's INJECT_TEXT, at most 300 bytes). */
+    fun text(t: String) {
+        val b = t.toByteArray(Charsets.UTF_8).let { if (it.size > 300) it.copyOf(300) else it }
+        if (b.isEmpty()) return
+        send(listOf(ByteBuffer.allocate(5 + b.size).order(ByteOrder.BIG_ENDIAN).apply { put(1.toByte()); putInt(b.size); put(b) }.array()))
+    }
+
+    /** v16: one finger at a point (fractions of the picture), for the pointer: DOWN, MOVE or UP. */
+    fun finger(action: Int, x: Float, y: Float) {
+        val w = width; val h = height
+        if (w <= 0 || h <= 0) return
+        val a = when (action) { android.view.MotionEvent.ACTION_DOWN -> DOWN; android.view.MotionEvent.ACTION_UP -> UP; else -> MOVE }
+        send(listOf(touchMessage(a, 0L, (x * w).toInt(), (y * h).toInt(), w, h, a != UP)))
     }
 
     private fun send(msgs: List<ByteArray>) {

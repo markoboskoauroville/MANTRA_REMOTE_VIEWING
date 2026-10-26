@@ -1177,7 +1177,7 @@ private fun ColumnScope.RailKey(word: String, whisper: String?, state: RailState
  * the space is a backspace, and the field goes back to its one space.
  */
 @Composable
-private fun TypingField(onText: (String) -> Unit, onBackspace: () -> Unit) {
+internal fun TypingField(onText: (String) -> Unit, onBackspace: () -> Unit) {
     val base = TextFieldValue(" ", TextRange(1))
     var value by remember { mutableStateOf(base) }
     val focus = remember { FocusRequester() }

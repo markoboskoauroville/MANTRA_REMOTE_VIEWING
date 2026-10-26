@@ -72,6 +72,14 @@ fun PhoneScreen(phone: Phone, onMac: () -> Unit) {
     var w by remember { mutableIntStateOf(0) }
     var h by remember { mutableIntStateOf(0) }
     var link by remember { mutableStateOf<AdbLink?>(null) }
+    // v16 (Marko, 26.10.2026: "I want to see my mouse on the screen ... I press and I drag, and it acts like ...
+    // keeping my left mouse button down"): MOUSE, a pointer moved like a trackpad (tap = click, hold then drag =
+    // the button held), or TOUCH, the finger is the finger; ⌨ types into the phone
+    var mouse by remember { mutableStateOf(true) }
+    var keyboard by remember { mutableStateOf(false) }
+    var px by remember { mutableStateOf(0.5f) }
+    var py by remember { mutableStateOf(0.5f) }
+    var held by remember { mutableStateOf(false) }
     androidx.activity.compose.BackHandler { link?.key("BACK") }
 
     DisposableEffect(phone.address) { onDispose { link?.stop(); link = null } }
@@ -94,13 +102,20 @@ fun PhoneScreen(phone: Phone, onMac: () -> Unit) {
             PhoneKey("BACK", Modifier.weight(1f)) { link?.key("BACK") }
             PhoneKey("HOME", Modifier.weight(1f)) { link?.key("HOME") }
         }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            PhoneKey(if (mouse) "MOUSE" else "TOUCH", Modifier.weight(1f)) { mouse = !mouse }
+            PhoneKey("⌨", Modifier.weight(1f)) { keyboard = !keyboard }
+            PhoneKey("APPS", Modifier.weight(1f)) { link?.key("APPS") }
+        }
         androidx.compose.material3.Text(status, color = Color(0xFF7FE0E6), fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp),
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, maxLines = 2,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp))
+        if (keyboard) TypingField(onText = { t -> if (t == "\n") link?.key("ENTER") else link?.text(t) }, onBackspace = { link?.key("DEL") })
         Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
             val ratio = if (w > 0 && h > 0) w.toFloat() / h else 1080f / 2400f
+            Box(Modifier.aspectRatio(ratio)) {
             AndroidView(
-                modifier = Modifier.aspectRatio(ratio),
+                modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
                     TextureView(ctx).apply {
                         surfaceTextureListener = object : TextureView.SurfaceTextureListener {
@@ -119,18 +134,57 @@ fun PhoneScreen(phone: Phone, onMac: () -> Unit) {
                             override fun onSurfaceTextureDestroyed(t: SurfaceTexture): Boolean { link?.stop(); link = null; return true }
                             override fun onSurfaceTextureUpdated(t: SurfaceTexture) {}
                         }
+                        var lastX = 0f; var lastY = 0f; var travel = 0f; var downAt = 0L
+                        val holdCheck = Runnable {
+                            // a finger held still for HOLD_MS: the button goes down where the pointer is
+                            if (mouse && !held && travel < SLOP_PX) { held = true; link?.finger(MotionEvent.ACTION_DOWN, px, py) }
+                        }
                         setOnTouchListener { v, ev ->
                             val a = link ?: return@setOnTouchListener true
-                            val n = ev.pointerCount
-                            val ids = IntArray(n) { ev.getPointerId(it) }
-                            val xs = FloatArray(n) { (ev.getX(it) / v.width).coerceIn(0f, 1f) }
-                            val ys = FloatArray(n) { (ev.getY(it) / v.height).coerceIn(0f, 1f) }
-                            a.touch(ev.actionMasked, ev.actionIndex, ids, xs, ys)
+                            if (!mouse) {
+                                val n = ev.pointerCount
+                                val ids = IntArray(n) { ev.getPointerId(it) }
+                                val xs = FloatArray(n) { (ev.getX(it) / v.width).coerceIn(0f, 1f) }
+                                val ys = FloatArray(n) { (ev.getY(it) / v.height).coerceIn(0f, 1f) }
+                                a.touch(ev.actionMasked, ev.actionIndex, ids, xs, ys)
+                                return@setOnTouchListener true
+                            }
+                            when (ev.actionMasked) {
+                                MotionEvent.ACTION_DOWN -> {
+                                    lastX = ev.x; lastY = ev.y; travel = 0f; downAt = ev.eventTime; held = false
+                                    v.postDelayed(holdCheck, HOLD_MS)
+                                }
+                                MotionEvent.ACTION_MOVE -> {
+                                    val dx = ev.x - lastX; val dy = ev.y - lastY
+                                    lastX = ev.x; lastY = ev.y; travel += kotlin.math.abs(dx) + kotlin.math.abs(dy)
+                                    px = (px + dx / v.width * SPEED).coerceIn(0f, 1f)
+                                    py = (py + dy / v.height * SPEED).coerceIn(0f, 1f)
+                                    if (held) a.finger(MotionEvent.ACTION_MOVE, px, py)
+                                }
+                                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                    v.removeCallbacks(holdCheck)
+                                    if (held) { a.finger(MotionEvent.ACTION_UP, px, py); held = false }
+                                    else if (ev.actionMasked == MotionEvent.ACTION_UP && travel < SLOP_PX && ev.eventTime - downAt < HOLD_MS) {
+                                        a.finger(MotionEvent.ACTION_DOWN, px, py); a.finger(MotionEvent.ACTION_UP, px, py)   // a click
+                                    }
+                                }
+                            }
                             true
                         }
                     }
                 },
             )
+            // the pointer: an arrow at its place on the picture, red while the button is held
+            if (mouse) androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                val x = px * size.width; val y = py * size.height; val k = 1.6f * density
+                val arrow = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(x, y); lineTo(x, y + 18 * k); lineTo(x + 5 * k, y + 13 * k); lineTo(x + 9 * k, y + 21 * k)
+                    lineTo(x + 12 * k, y + 19.5f * k); lineTo(x + 8 * k, y + 12 * k); lineTo(x + 14 * k, y + 12 * k); close()
+                }
+                drawPath(arrow, if (held) Color(0xFFE5484D) else Color.White)
+                drawPath(arrow, Color.Black, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2f * density))
+            }
+            }
         }
     }
 }
@@ -151,3 +205,9 @@ private fun PhoneKey(label: String, modifier: Modifier, onClick: () -> Unit) {
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
     }
 }
+
+/** v16: how far the pointer goes for a finger's travel, how long a still finger takes to hold the button, and how
+ *  far a finger may wander and still be a tap. */
+private const val SPEED = 1.6f
+private const val HOLD_MS = 350L
+private const val SLOP_PX = 24f
