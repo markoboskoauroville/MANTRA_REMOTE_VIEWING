@@ -122,7 +122,12 @@ fun PhoneScreen(phone: Phone, onMac: () -> Unit) {
                             override fun onSurfaceTextureAvailable(t: SurfaceTexture, sw: Int, sh: Int) {
                                 val (host, port) = phone.address.substringBefore(':') to (phone.address.substringAfter(':').toIntOrNull() ?: 5555)
                                 val a = AdbLink(context.applicationContext, { host to port }, Surface(t),
-                                    onStatus = { msg -> post { status = "${phone.name}: $msg" } },
+                                    // v16 (Marko, 26.10.2026: "I'm not able to connect to my Pixel phone ... There is some
+                                    // problem"): a phone that does not answer is said in words, with what to do
+                                    onStatus = { msg -> post { status = if (msg.contains("failed to connect") || msg.contains("did not answer"))
+                                        "${phone.name} DOES NOT ANSWER AT ${phone.address}. Locked since a restart (Tailscale starts only after " +
+                                        "the first unlock), Tailscale off, or adb not on 5555 (adb tcpip 5555 from the Mac). Trying again…"
+                                        else "${phone.name}: $msg" } },
                                     onSize = { nw, nh -> post { w = nw; h = nh } },
                                     onPairingNeeded = { post { status = "${phone.name}: allow this phone on the ${phone.name} (\"Allow USB debugging?\" → Always)" } },
                                     // the light picture of the Camera Remote on mobile data, enough to drive a phone
