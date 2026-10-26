@@ -82,3 +82,7 @@ Accessibility. Not tried: away from home on 4G. The page in `site/` is written b
 > there is too much numbers of this sending. Please average it and slowly change the number milliseconds and also make three digits fixed. They are not changing places
 > please add three zeros as a placeholder for the numbers of milliseconds
 > in the settings and the quit, you can just put "Quit App," so people don't think it's quitting the menu itself
+
+**Status, 26.10.2026 06:48:** the requests after the first close are done in v10–v11 and seen on the phone: the top
+buttons gone, the meter steady (fixed widths, ms averaged, 065 ms), switchable in ⚙; ⚙ after LOGIN with the meter
+explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.

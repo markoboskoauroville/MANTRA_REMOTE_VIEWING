@@ -128,7 +128,7 @@ private fun helpText(label: String): String {
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
-        l == "⚙" -> "Settings: the meter of the link with its meaning, the frames per second, the colours, the meter on the screen on or off, and ✕ QUIT, which closes the link, switches Tailscale off and quits the app."
+        l == "⚙" -> "Settings: the meter of the link with its meaning, the frames per second, the colours, the meter on the screen on or off, and ✕ QUIT APP, which closes the link, switches Tailscale off and quits the app."
         l == "☰" -> "MENU: the keys below become the Mac's menu bar keys. The menu bar of the app in front opens (even when it hides itself); ← → go from menu to menu, ↑ ↓ through the items, ⏎ CHOOSE picks, ☰ OPEN opens it again, ✕ EXIT closes the menus and brings your keys back."
         l == "⇄" -> "Switches the picture between the two screens: the BenQ and the MacBook Pro. The small word under it is the screen you are watching now."
         l.contains("FULL") || l == "⛶" -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
@@ -928,7 +928,7 @@ private fun Live(s: Session) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Key("BACK", Modifier.weight(1f), size = 14) { settingsOpen = false }
-                Key("✕ QUIT", Modifier.weight(1f), size = 14) { settingsOpen = false; s.hangUp(); activity.finish() }
+                Key("✕ QUIT APP", Modifier.weight(1f), size = 14) { settingsOpen = false; s.hangUp(); activity.finish() }
             }
         }
     }
