@@ -16,7 +16,9 @@
         android:label="Mantra Remote"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:theme="@style/Theme.Remote">
+        android:theme="@style/Theme.Remote"
+        android:usesCleartextTraffic="true">
+        <!-- plain http to the Mac's own Dock Switcher (:8861) inside Tailscale and the home Wi-Fi; nothing else is fetched -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

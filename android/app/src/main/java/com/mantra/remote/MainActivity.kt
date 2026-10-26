@@ -122,9 +122,9 @@ private fun helpText(label: String): String {
         l.contains("KEYS") || l == "⌨" -> "Opens the phone's keyboard. What you type is typed on the Mac."
         l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
-        l == "FULL" || l == "65K" || l == "4096" || l == "512" || l == "64" || l == "8" || l == "B/W" || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
+        l.removePrefix("C").trim() in setOf("FULL", "65K", "4096", "512", "64", "8", "B/W") || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
         l.startsWith("NEXT") || l == "TAB ▶" -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first."
-        l == "DOCK" -> "Opens the Dock Switcher on the Mac (⌃ tapped twice there): the square of your apps on every screen, with the clock and the weather. Tap an app to launch it or bring it to the front; DOCK again or ESC closes the square."
+        l == "DOCK" -> "The Dock's apps on the whole phone, the Dock Switcher's own list. Tap one: the Mac switches to it, or starts it. A dot: open; lit: in front. ⌃⌃ MAC opens the square on the Mac itself; ✕ or Back closes."
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
@@ -242,6 +242,48 @@ private class Session : Rfb.Listener {
     /** The key on its way to the Mac, shown small above the keys until it lands; "" when nothing is travelling. */
     var pressed by mutableStateOf("")
     var pressedAt by mutableLongStateOf(0L)
+    /** The Mac's address of this link. */
+    @Volatile var host = ""
+    /**
+     * Where the Dock Switcher's listener (MacSister) answers: Tailscale first, macOS holds back the home Wi-Fi from it
+     * unless Local Network is allowed for it (found 26.10.2026); at home Tailscale goes straight over the Wi-Fi anyway.
+     */
+    @Volatile var sisterHost = ""
+    /** Keys the Mac has seen (MacSister), and that count when the key now travelling left; -1: not known yet. */
+    @Volatile var keysSeen = -1L
+    @Volatile var pressedBase = -1L
+    /** The sister answers: the landing line is hers; otherwise the 1x1 picture (Rfb.probe) stands in. */
+    @Volatile var sisterOk = false
+    private var watching = 0
+    /** The phone's dock (DOCK): open, and its apps with their icons, kept between openings. */
+    var dockOpen by mutableStateOf(false)
+    var dockApps by mutableStateOf<List<MacSister.DockApp>>(emptyList())
+    var dockNote by mutableStateOf("")
+    val icons = androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.graphics.ImageBitmap>()
+
+    /**
+     * Asks the Mac, again and again, how many keys it has seen; each answer comes the moment the count passes the last
+     * one, so a key from the phone is known landed when the Mac itself saw it (Marko, 26.10.2026).
+     */
+    private fun watchKeys() {
+        val me = ++watching
+        Thread({
+            while (me == watching && wanted) {
+                if (sisterHost.isEmpty()) sisterHost = listOf(MacFinder.MAC_TAILSCALE_IP, host).firstOrNull { it.isNotEmpty() && MacSister.keys(it, -1) != null } ?: ""
+                val n = if (sisterHost.isEmpty()) null else MacSister.keys(sisterHost, keysSeen)
+                if (n == null) { sisterOk = false; sisterHost = ""; Thread.sleep(2000); continue }
+                sisterOk = true
+                keysSeen = n
+                if (pressed.isNotEmpty() && pressedBase >= 0 && n > pressedBase) main.post { landed() }
+            }
+        }, "mac-keys").start()
+    }
+
+    fun landed() {
+        if (pressed.isEmpty()) return
+        android.util.Log.i("MantraRemote", "landed: $pressed in ${System.currentTimeMillis() - pressedAt} ms (${if (sisterOk) "the Mac saw it" else "picture probe"})")
+        pressed = ""
+    }
     /** A link is wanted (CONNECT was pressed, ✕ not): a link that falls is dialled again on return. */
     var wanted = false
 
@@ -278,6 +320,7 @@ private class Session : Rfb.Listener {
             // the home address is remembered: next time at home it is tried first among the others
             android.util.Log.i("MantraRemote", "the Mac answered at $host (${if (MacFinder.isLocal(host)) "home Wi-Fi" else "Tailscale"})")
             if (MacFinder.isLocal(host)) p.edit().putString("lan_host", host).apply()
+            this.host = host
             status = "> DIAL $host:$port"
             val password = p.getString("password", "") ?: ""
             val user = p.getString("user", "markobosko") ?: "markobosko"
@@ -304,12 +347,11 @@ private class Session : Rfb.Listener {
         phase = Phase.LIVE; status = "LINK ESTABLISHED"; statusBad = false; redials = 0
         if (background) rfb?.minIntervalMs = BACKGROUND_MS
         app?.let(LinkService::start)
+        watchKeys()
     }
     override fun onFrame() { tick++ }
-    override fun onLanded() {
-        android.util.Log.i("MantraRemote", "landed: $pressed in ${System.currentTimeMillis() - pressedAt} ms")
-        pressed = ""
-    }
+    // the picture probe speaks only while the sister on the Mac does not answer
+    override fun onLanded() { if (!sisterOk) main.post { landed() } }
     override fun onClosed(reason: String) {
         phase = Phase.SETUP; status = reason.uppercase(); statusBad = true
         // in front, a fall is dialled again by itself (Tailscale coming up changes the network under the link);
@@ -459,7 +501,8 @@ private val KEY_NAMES by lazy { mapOf(K_ESC to "ESC", K_TAB to "TAB", K_RETURN t
 @Composable
 private fun Live(s: Session) {
     val rfb = s.rfb ?: return
-    var monitor by remember { mutableIntStateOf(0) }
+    // the monitor, the zoom and where the picture stood come back after a restart (Marko, 26.10.2026)
+    var monitor by remember { mutableIntStateOf(s.prefs?.getInt("monitor", 0) ?: 0) }
     // the frame rate is remembered between restarts; 1 FPS when nothing was chosen yet (Marko, 25.10.2026)
     var fpsIndex by remember {
         val saved = s.prefs?.getString("fps_label", "1") ?: "1"
@@ -491,8 +534,20 @@ private fun Live(s: Session) {
     val view = LocalView.current
 
     val rect = monitorRect(monitor, s.fbW, s.fbH)
+    var restored by remember { mutableStateOf(false) }
     LaunchedEffect(rfb, monitor, s.fbW, s.fbH) {
-        rfb.setRegion(rect[0], rect[1], rect[2], rect[3]); zoom = 1f; pan = Offset.Zero
+        rfb.setRegion(rect[0], rect[1], rect[2], rect[3])
+        val p = s.prefs
+        if (!restored && p != null && p.getInt("monitor", -1) == monitor) {
+            zoom = p.getFloat("zoom", 1f); pan = Offset(p.getFloat("pan_x", 0f), p.getFloat("pan_y", 0f))
+        } else { zoom = 1f; pan = Offset.Zero }
+        restored = true
+        p?.edit()?.putInt("monitor", monitor)?.apply()
+    }
+    LaunchedEffect(zoom, pan) {
+        if (!restored) return@LaunchedEffect
+        delay(400)                                               // saved once the fingers rest
+        s.prefs?.edit()?.putFloat("zoom", zoom)?.putFloat("pan_x", pan.x)?.putFloat("pan_y", pan.y)?.apply()
     }
     LaunchedEffect(rfb, fpsIndex) {
         s.fpsMs = FPS[fpsIndex].second
@@ -535,7 +590,7 @@ private fun Live(s: Session) {
         if (m.isNotEmpty()) mods.value = emptySet()
     }
     // what is on its way, shown above the keys until the Mac has it (Marko, 26.10.2026)
-    fun travelling(label: String) { s.pressed = label; s.pressedAt = System.currentTimeMillis() }
+    fun travelling(label: String) { s.pressed = label; s.pressedAt = System.currentTimeMillis(); s.pressedBase = s.keysSeen }
     fun tapKey(k: Int) {
         travelling((mods.value.mapNotNull { m -> MOD_KEYS.firstOrNull { it.second == m }?.first } + KEY_NAMES.getOrElse(k) { "KEY" }).joinToString(" "))
         withMods { rfb.key(k, true); rfb.key(k, false) }
@@ -567,7 +622,8 @@ private fun Live(s: Session) {
     // DOCK: ⌃ tapped twice, the Dock Switcher's square (Marko, 26.10.2026: "an action button to open the dock so I can
     // launch my applications remotely from the phone"). Not ⌃`: on his US International layout ` is a dead key and
     // Screen Sharing never delivers it (tried 26.10.2026). The pause makes the two taps two, as his finger would.
-    fun dock() {
+    // the old way, ⌃⌃ on the Mac: still there when the Dock Switcher's listener does not answer
+    fun dockOnMac() {
         mods.value = emptySet(); releaseCmd()
         travelling("DOCK")
         Thread {
@@ -586,6 +642,10 @@ private fun Live(s: Session) {
             if (s.pressed.isNotEmpty()) T(if (late) "${s.pressed}  NOT LANDED YET" else "${s.pressed}  →  MAC", if (late) RedAlert else AmberGlow, 11, oneLine = true)
         }
     }
+
+    // DOCK: the Dock's apps on the whole phone, picked here, switched or started on the Mac (Marko, 26.10.2026: "build a
+    // remote controller for my dock, so I'm not waiting for the dock and trying to find it on screen")
+    fun dock() { s.dockOpen = true; s.dockNote = "" }
 
     val activity = LocalContext.current as ComponentActivity
     // full screen is always landscape; otherwise the phone stands as Marko chose (portrait by default)
@@ -780,7 +840,7 @@ private fun Live(s: Session) {
         Key("${FPS[fpsIndex].first} FPS", modifier, size = 14, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
         Key("SCROLL", modifier, active = scrollMode, size = 14) { scrollMode = !scrollMode }
         Key("⌨", modifier, active = keyboard, size = 26) { keyboard = !keyboard }
-        Key(colours.label, modifier, size = 14, onLongClick = { coloursMenu = true }) {
+        Key("C" + colours.label.let { if (it[0].isDigit()) it else " $it" }, modifier, size = 14, onLongClick = { coloursMenu = true }) {
             setColours(Colours.ALL[(Colours.ALL.indexOfFirst { it.label == colours.label } + 1) % Colours.ALL.size])
         }
         Key("LOGIN", modifier, size = 14) { login() }
@@ -883,6 +943,73 @@ private fun Live(s: Session) {
             Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { toggles(Modifier.weight(1f)) }
             Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { views() }
             typing()
+        }
+    }
+    if (s.dockOpen) DockScreen(s, onMac = { s.dockOpen = false; dockOnMac() }) { app ->
+        travelling(app.name)
+        s.dockOpen = false
+        // no key travels: the line clears when the Mac answers that it switched or started the app
+        Thread { if (MacSister.open(s.sisterHost.ifEmpty { MacFinder.MAC_TAILSCALE_IP }, app.id)) s.landed() else s.pressed = "${app.name}: THE MAC DID NOT ANSWER" }.start()
+    }
+}
+
+/**
+ * The phone's dock: the apps of the Dock Switcher's square, as large as the phone allows, in the square's order. A tap
+ * switches to the app on the Mac, or starts it; the open ones carry a dot, the one in front is lit (Marko, 26.10.2026:
+ * "It should fill up my screen real estate on my phone with the same functions. Then I pick switching or starting").
+ */
+@Composable
+private fun DockScreen(s: Session, onMac: () -> Unit, onPick: (MacSister.DockApp) -> Unit) {
+    androidx.activity.compose.BackHandler { s.dockOpen = false }
+    LaunchedEffect(Unit) {
+        val host = s.sisterHost.ifEmpty { MacFinder.MAC_TAILSCALE_IP }
+        val list = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { MacSister.apps(host) }
+        if (list == null) { s.dockNote = "THE DOCK SWITCHER ON THE MAC DOES NOT ANSWER (PORT ${MacSister.PORT})"; return@LaunchedEffect }
+        s.dockApps = list
+        list.filter { it.id !in s.icons }.forEach { a ->
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { MacSister.icon(host, a.id) }?.let { s.icons[a.id] = it }
+        }
+    }
+    Column(Modifier.fillMaxSize().background(Bg).padding(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            T("── DOCK ──", AmberDim, 14, modifier = Modifier.weight(1f))
+            Key("⌃⌃ MAC", Modifier.width(96.dp), size = 13) { onMac() }
+            Spacer(Modifier.width(6.dp))
+            Key("✕", Modifier.width(56.dp)) { s.dockOpen = false }
+        }
+        if (s.dockNote.isNotEmpty()) T(s.dockNote, RedAlert, 13)
+        val apps = s.dockApps
+        if (apps.isEmpty()) { if (s.dockNote.isEmpty()) T("> ASKING THE MAC …", GreenOk, 14); return@Column }
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().padding(top = 8.dp)) {
+            // as many columns as make the cells closest to square on this screen
+            val n = apps.size
+            val cols = kotlin.math.ceil(kotlin.math.sqrt(n * maxWidth.value / maxHeight.value)).toInt().coerceIn(1, n)
+            val rows = (n + cols - 1) / cols
+            val cellW = maxWidth / cols; val cellH = maxHeight / rows
+            val iconSize = minOf(cellW, cellH - 22.dp) * 0.78f
+            Column {
+                for (r in 0 until rows) Row {
+                    for (c in 0 until cols) {
+                        val a = apps.getOrNull(r * cols + c)
+                        Box(Modifier.width(cellW).height(cellH), contentAlignment = Alignment.Center) {
+                            if (a != null) Column(
+                                Modifier.fillMaxSize().padding(3.dp)
+                                    .background(if (a.front) BgRaised else Bg)
+                                    .border(1.dp, if (a.front) AmberGlow else Rule)
+                                    .clickable { onPick(a) },
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                val icon = s.icons[a.id]
+                                if (icon != null) androidx.compose.foundation.Image(icon, a.name, Modifier.size(iconSize))
+                                else Box(Modifier.size(iconSize))
+                                T(a.name, if (a.running) Amber else AmberDim, 11, oneLine = true)
+                                T(if (a.running) "●" else " ", Amber, 9)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

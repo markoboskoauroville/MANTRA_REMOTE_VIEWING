@@ -1,9 +1,9 @@
-# TAKEOVER: Mantra Remote (Android), state 26.10.2026, v7
+# TAKEOVER: Mantra Remote (Android), state 26.10.2026, v8
 
 **What it is.** An Android app (Kotlin + Compose, `android/`, package `com.mantra.remote`) that controls Marko's Mac from his
 Nothing Phone 2a over the internet. Tailscale carries it (Mac 100.79.251.19, phone 100.67.149.40); the Mac side is Apple
 Screen Sharing on port 5900. The RFB client is our own (`Rfb.kt`): ARD auth (type 30) logs in as the Mac user and shows
-the real desktop (type 2, the VNC password, only sees the lock screen). Release: v7 on GitHub, built on the Mac.
+the real desktop (type 2, the VNC password, only sees the lock screen). Release: v8 on GitHub, built on the Mac.
 
 **Files.**
 - `android/app/src/main/java/com/mantra/remote/Rfb.kt`: the protocol, the encodings (ZRLE, Zlib, Hextile, CopyRect, Raw,
@@ -37,7 +37,13 @@ KEYS, SCROLL, FPS (long press: list), colours (long press: list), LOGIN; ⛶ FUL
 Chrome and iTerm, works in VIEW ONLY). Gestures: 1 finger mouse (tap click, long press drag / right click), 2 zoom, 3 pan.
 
 **Open (next session).**
-0. v7 (26.10.2026): last row ⛶ | VIEW | TAB ▶ | ⇄ (BENQ/MACBOOK under it) | DOCK, widths by weight. Seen on the phone.
+0. v8 (26.10.2026): DOCK opens the phone's dock (`DockScreen`): the Dock Switcher's apps from `MacSister` (:8861 on
+   the Mac, Dock Switcher v6 `Remote.swift`), cells as square as the screen allows, dot = open, lit = in front; a tap
+   = `/open` (switch or start), ⌃⌃ MAC keeps the old way. The landing line now waits on the Mac's own key count
+   (`/keys?after=N` long-poll, `Session.watchKeys`), 30–42 ms at home; the picture probe only when the sister is
+   silent. The sister is asked at 100.79.251.19 first (macOS Local Network privacy holds back the Wi-Fi), cleartext
+   allowed in the manifest. Colours read C8, C64 …; monitor, zoom and pan remembered (monitor proven; zoom/pan not yet).
+   v7 (26.10.2026): last row ⛶ | VIEW | TAB ▶ | ⇄ (BENQ/MACBOOK under it) | DOCK, widths by weight. Seen on the phone.
    v6 (26.10.2026): (a) the line above the keys shows what is travelling ("ESC  →  MAC"), gone when it landed, red
    "NOT LANDED YET" after 3 s; landing is proven by `Rfb.probe()`: a whole 1x1 request at (0,0) after the keys, the Mac
    answers in order (log "landed: … in N ms", 76 ms at home). In full screen the line sits at the top of the picture.

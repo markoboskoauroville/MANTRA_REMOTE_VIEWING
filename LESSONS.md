@@ -39,3 +39,7 @@
   ⌨ and the colours, his dictation keyboard heard him and the app typed his words ("two more requests, please") into
   iTerm on the Mac. Screenshot right before every tap; stop tapping while he holds the phone.
 - **The first full picture of MON 2 (3024x1964) takes about 8 s at home**; until then the picture is black.
+- **The 1x1 picture probe is no proof of landing**: Apple's server answered it late or not at all while the key had
+  landed (Marko saw "NOT LANDED YET" with the key done). The Mac's own count of key events (Dock Switcher /keys) is.
+- **Android blocks plain http by default** (targetSdk 35); runCatching hid the error. Log every failure of a network call.
+
