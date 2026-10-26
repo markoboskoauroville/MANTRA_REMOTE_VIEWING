@@ -123,7 +123,7 @@ private fun helpText(label: String): String {
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l == "FULL" || l == "65K" || l == "4096" || l == "512" || l == "64" || l == "8" || l == "B/W" || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
         l.startsWith("NEXT") || l == "TAB ▶" -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first. It works in VIEW ONLY too."
-        l == "DOCK" -> "Opens the Dock Switcher on the Mac (⌃` there): the square of your apps on every screen, with the clock and the weather. Tap an app to launch it or bring it to the front; DOCK again or ESC closes the square. It works in VIEW ONLY too."
+        l == "DOCK" -> "Opens the Dock Switcher on the Mac (⌃ tapped twice there): the square of your apps on every screen, with the clock and the weather. Tap an app to launch it or bring it to the front; DOCK again or ESC closes the square. It works in VIEW ONLY too."
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
@@ -139,7 +139,7 @@ private fun helpText(label: String): String {
         l == "⏎" -> "Return: confirms, sends, a new line."
         l == "⌫" -> "Delete: removes the letter before the cursor."
         l == "←" || l == "→" || l == "↑" || l == "↓" -> "The arrow key, as on the Mac's keyboard."
-        l == "CONNECT" -> "Dials the Mac through Tailscale and logs in by itself with the user and password above."
+        l == "CONNECT" -> "Switches Tailscale on, finds the Mac by itself (home Wi-Fi or Tailscale, the first that answers) and logs in with the user and password above. The app does this by itself when it opens."
         else -> label
     }
 }
@@ -164,6 +164,11 @@ private object Hold {
     var session: Session? = null
 }
 
+/** The app closed (Back, or swiped away from the recent apps): the link and Tailscale go off. */
+internal fun closeApp() { Hold.session?.hangUp() }
+
+private const val MAX_REDIALS = 5
+
 /** In the background the picture comes at 0.2 FPS; in front, at what Marko chose (Marko, 25.10.2026). */
 private const val BACKGROUND_MS = 5000L
 
@@ -179,6 +184,14 @@ class MainActivity : ComponentActivity() {
             Hold.session = it
         }
         setContent { App(prefs, session) }
+        // nothing to press: Tailscale on, the Mac found, dialled and logged in (Marko, 26.10.2026)
+        if (!session.wanted && !prefs.getString("password", "").isNullOrEmpty()) session.start()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Back out of the app closes it: the link and Tailscale go off with it
+        if (isFinishing) closeApp()
     }
 
     override fun onStart() {
@@ -187,7 +200,7 @@ class MainActivity : ComponentActivity() {
         s.background = false
         s.rfb?.let { it.minIntervalMs = s.fpsMs; it.wake() }
         // the link fell while away (the network changed, the Mac slept): dial again by itself, no CONNECT needed
-        if (s.wanted && s.phase == Phase.SETUP) { s.phase = Phase.CONNECTING; s.status = "> DIAL AGAIN"; s.statusBad = false; s.dial(coloursSaved(s.prefs)) }
+        if (s.wanted && s.phase == Phase.SETUP) s.start()
     }
 
     override fun onStop() {
@@ -227,9 +240,54 @@ private class Session : Rfb.Listener {
     /** A link is wanted (CONNECT was pressed, ✕ not): a link that falls is dialled again on return. */
     var wanted = false
 
-    /** ✕: the link is closed on purpose, nothing dials again and the background service ends. */
+    /** Each start counts; a search still running for an older start gives up. */
+    @Volatile private var attempt = 0
+    /** Falls dialled again in a row; after [MAX_REDIALS] the app stops and shows why. */
+    private var redials = 0
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /**
+     * Tailscale on, the Mac found (home Wi-Fi or Tailscale, whichever answers first), dialled and logged in, with nothing
+     * typed (Marko, 26.10.2026: "all connections must be done automatically without me searching for addresses").
+     */
+    fun start() {
+        val c = app ?: return
+        val p = prefs ?: return
+        loginPassword = p.getString("login", "") ?: ""
+        wanted = true; phase = Phase.CONNECTING; status = "> TAILSCALE ON"; statusBad = false
+        rfb?.close(); rfb = null; baseRx = 0; baseTx = 0
+        LinkService.start(c)
+        val gen = ++attempt
+        Thread({
+            Tailscale.onAndWait(c)
+            val port = p.getString("port", "5900")?.toIntOrNull() ?: 5900
+            val host = MacFinder.find(c, port, listOf(p.getString("host", "") ?: "", p.getString("lan_host", "") ?: "")) {
+                if (gen == attempt) status = it
+            }
+            if (gen != attempt || !wanted) return@Thread
+            if (host == null) {
+                phase = Phase.SETUP; statusBad = true
+                status = "THE MAC DOES NOT ANSWER. IS IT AWAKE, IS SCREEN SHARING ON? CONNECT TRIES AGAIN."
+                return@Thread
+            }
+            // the home address is remembered: next time at home it is tried first among the others
+            if (!host.startsWith("100.") && host != MacFinder.MAC_TAILSCALE_NAME) p.edit().putString("lan_host", host).apply()
+            status = "> DIAL $host:$port"
+            val password = p.getString("password", "") ?: ""
+            val user = p.getString("user", "markobosko") ?: "markobosko"
+            dial = { colours ->
+                rfb?.let { old -> old.close(); baseRx += old.rxBytes.get(); baseTx += old.txBytes.get() }
+                val r = Rfb(this, colours); rfb = r
+                r.connect(host, port, password, user, loginPassword)
+            }
+            main.post { if (gen == attempt && wanted) dial(coloursSaved(p)) }
+        }, "find-mac").start()
+    }
+
+    /** ✕ or the app closed: the link is closed on purpose, nothing dials again, the service ends and Tailscale goes off. */
     fun hangUp() {
-        wanted = false; rfb?.close(); app?.let(LinkService::stop)
+        wanted = false; attempt++; rfb?.close()
+        app?.let { LinkService.stop(it); Tailscale.off(it) }
         phase = Phase.SETUP; status = "LINK CLOSED"; statusBad = false
     }
 
@@ -237,15 +295,16 @@ private class Session : Rfb.Listener {
         android.util.Log.i("MantraRemote", "framebuffer ${width}x$height name '$name'")
         if (name.isNotEmpty()) this.name = name
         fbW = width; fbH = height
-        phase = Phase.LIVE; status = "LINK ESTABLISHED"; statusBad = false
+        phase = Phase.LIVE; status = "LINK ESTABLISHED"; statusBad = false; redials = 0
         if (background) rfb?.minIntervalMs = BACKGROUND_MS
         app?.let(LinkService::start)
     }
     override fun onFrame() { tick++ }
     override fun onClosed(reason: String) {
         phase = Phase.SETUP; status = reason.uppercase(); statusBad = true
-        // in front, the fall is shown; behind, the service stays and the link is dialled again on return
-        if (!background) app?.let(LinkService::stop)
+        // in front, a fall is dialled again by itself (Tailscale coming up changes the network under the link);
+        // behind, on return (onStart)
+        if (wanted && !background && redials < MAX_REDIALS) { redials++; main.postDelayed({ if (wanted && phase == Phase.SETUP) start() }, 2000) }
     }
     override fun onStats(bytesIn: Long, frames: Long, lastFrameMs: Long) { this.frames = frames; lastMs = lastFrameMs }
 }
@@ -333,7 +392,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
         T("MANTRA REMOTE ▊", Amber, 34, bold = true)
         T("v" + BuildConfig.VERSION_NAME, AmberDim, 13)          // the version the person sees (versioning.md §3)
         T("── THE MAC ───────────────────", Rule, 16)
-        Field("HOST (TAILSCALE NAME OR 100.x.x.x)", host) { host = it.trim() }
+        Field("HOST (FOUND BY ITSELF; ONLY IF IT IS NOT)", host) { host = it.trim() }
         Field("PORT", port, number = true) { port = it.filter(Char::isDigit) }
         Field("VNC PASSWORD (SCREEN SHARING)", password, secret = true) { password = it }
         Field("MAC USER (SHORT NAME)", user) { user = it.trim() }
@@ -342,21 +401,13 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
         Key(if (s.phase == Phase.CONNECTING) "DIALLING …" else "CONNECT", Modifier.fillMaxWidth(), size = 22) {
             if (s.phase == Phase.CONNECTING) return@Key
             prefs.edit().putString("host", host).putString("port", port).putString("password", password).putString("login", login).putString("user", user).apply()
-            s.loginPassword = login
-            s.phase = Phase.CONNECTING; s.status = "> DIAL $host:$port"; s.statusBad = false
-            s.rfb?.close(); s.rfb = null; s.baseRx = 0; s.baseTx = 0; s.wanted = true   // CONNECT starts a new session
-            s.dial = { colours ->
-                s.rfb?.let { old -> old.close(); s.baseRx += old.rxBytes.get(); s.baseTx += old.txBytes.get() }
-                val rfb = Rfb(s, colours); s.rfb = rfb
-                rfb.connect(host, port.toIntOrNull() ?: 5900, password, user, login)
-            }
-            s.dial(coloursSaved(prefs))
+            s.start()
         }
         Spacer(Modifier.height(12.dp))
         T("> " + s.status, if (s.statusBad) RedAlert else GreenOk, 16)
         Spacer(Modifier.height(16.dp))
-        T("Over the internet the phone and the Mac meet on Tailscale: both signed in to the same account, " +
-            "the phone's Tailscale switched on. The host is then the Mac's Tailscale name.", AmberDim, 13)
+        T("Nothing to type: the app switches Tailscale on, finds the Mac on the home Wi-Fi or through Tailscale, " +
+            "whichever answers first, and logs in. Closing the app switches Tailscale off.", AmberDim, 13)
     }
 }
 
@@ -387,7 +438,6 @@ private const val K_SHIFT = 0xffe1
 private const val K_BACKSPACE = 0xff08
 private const val K_TAB = 0xff09
 private const val K_BRACERIGHT = 0x7d
-private const val K_GRAVE = 0x60
 private const val K_RETURN = 0xff0d
 private const val K_ESC = 0xff1b
 private const val K_LEFT = 0xff51
@@ -495,12 +545,16 @@ private fun Live(s: Session) {
         listOf(K_BRACERIGHT, K_SHIFT, K_CMD).forEach { rfb.key(it, false, always = true) }
     }
 
-    // DOCK: ⌃`, the Dock Switcher's own shortcut, so the square opens without the double ⌃'s timing (Marko, 26.10.2026:
-    // "an action button to open the dock so I can launch my applications remotely from the phone")
+    // DOCK: ⌃ tapped twice, the Dock Switcher's square (Marko, 26.10.2026: "an action button to open the dock so I can
+    // launch my applications remotely from the phone"). Not ⌃`: on his US International layout ` is a dead key and
+    // Screen Sharing never delivers it (tried 26.10.2026). The pause makes the two taps two, as his finger would.
     fun dock() {
         mods.value = emptySet(); releaseCmd()
-        rfb.key(K_CTRL, true, always = true); rfb.key(K_GRAVE, true, always = true)
-        rfb.key(K_GRAVE, false, always = true); rfb.key(K_CTRL, false, always = true)
+        Thread {
+            rfb.key(K_CTRL, true, always = true); rfb.key(K_CTRL, false, always = true)
+            Thread.sleep(150)
+            rfb.key(K_CTRL, true, always = true); rfb.key(K_CTRL, false, always = true)
+        }.start()
     }
 
     val activity = LocalContext.current as ComponentActivity

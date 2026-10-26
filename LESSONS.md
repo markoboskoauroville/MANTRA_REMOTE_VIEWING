@@ -18,3 +18,14 @@
 - **Nothing OS takes three fingers** for its screenshot (secure setting nothing_three_finger_screenshot); Marko switched
   it off 25.10.2026.
 - **Don't drive the phone while Marko holds it**: an adb tap lands in whatever app he has open.
+- **(26.10.2026) ⌃` never arrives through Screen Sharing on US International-PC**: ` is a dead key there. Shortcuts sent
+  over VNC must avoid dead-key characters; the double ⌃ (two clean taps, a pause between) works.
+- **Switching Tailscale on breaks every open socket**: switch it on, wait for the VPN network, then dial.
+- **Tailscale for Android takes CONNECT_VPN / DISCONNECT_VPN broadcasts** to `.IPNReceiver`; the calling app needs
+  `<queries>` for `com.tailscale.ipn`. `adb shell am broadcast -n com.tailscale.ipn/.IPNReceiver -a …` tests it.
+- **Wi-Fi debugging on the Nothing**: `adb mdns services` lists it (`adb-0005534BC000140-…`, 192.168.1.102), `adb
+  connect` that address; it stays on the Wi-Fi when Tailscale goes off. A Back too many lands in his open app (it
+  happened: Fiverr's label sheet opened, closed again with Back, nothing chosen).
+- **The Dock Switcher's square once stayed open** through ⌃⌃ and ESC from the phone, while his clock app (Timer
+  Stopwatch Clock, a floating full-screen window) was in front; the `community.auroville.dockswitcher.close`
+  notification closed it, and after that DOCK opened and closed it every time. Cause not found.

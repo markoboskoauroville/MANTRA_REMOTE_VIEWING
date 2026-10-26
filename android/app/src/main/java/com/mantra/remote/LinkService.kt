@@ -27,13 +27,18 @@ class LinkService : Service() {
         )
         val n = Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Mantra Remote: link held")
+            .setContentTitle("Mantra Remote: link to the Mac")
             .setContentText("In the background at 0.2 FPS. Tap to come back.")
             .setContentIntent(open)
             .setOngoing(true)
             .build()
         startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         return START_NOT_STICKY
+    }
+
+    /** Swiped away from the recent apps: the app is closed, so the link and Tailscale go off (Marko, 26.10.2026). */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        closeApp(); stopSelf()
     }
 
     companion object {
