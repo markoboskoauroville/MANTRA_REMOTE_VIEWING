@@ -128,7 +128,7 @@ private fun helpText(label: String): String {
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
-        l == "⚙" -> "Settings: the meter of the link with its meaning, the meter on the screen on or off, and ✕ QUIT, which closes the link, switches Tailscale off and quits the app."
+        l == "⚙" -> "Settings: the meter of the link with its meaning, the frames per second, the colours, the meter on the screen on or off, and ✕ QUIT, which closes the link, switches Tailscale off and quits the app."
         l == "☰" -> "MENU: the keys below become the Mac's menu bar keys. The menu bar of the app in front opens (even when it hides itself); ← → go from menu to menu, ↑ ↓ through the items, ⏎ CHOOSE picks, ☰ OPEN opens it again, ✕ EXIT closes the menus and brings your keys back."
         l == "⇄" -> "Switches the picture between the two screens: the BenQ and the MacBook Pro. The small word under it is the screen you are watching now."
         l.contains("FULL") || l == "⛶" -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
@@ -880,12 +880,9 @@ private fun Live(s: Session) {
     }
     val toggles: @Composable RowScope.(Modifier) -> Unit = { modifier ->
         // FPS first, the keyboard where FPS was, drawn as a keyboard (Marko, 26.10.2026)
-        Key("${FPS[fpsIndex].first} FPS", modifier, size = 14, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
+        // FPS and the colours live in ⚙ (Marko, 26.10.2026: "number of colors and FPS can be moved to the settings")
         Key("SCROLL", modifier, active = scrollMode, size = 14) { scrollMode = !scrollMode }
         Key("⌨", modifier, active = keyboard, size = 26) { keyboard = !keyboard }
-        Key("C" + colours.label.let { if (it[0].isDigit()) it else " $it" }, Modifier.weight(0.75f), size = 14, padH = 4, onLongClick = { coloursMenu = true }) {
-            setColours(Colours.ALL[(Colours.ALL.indexOfFirst { it.label == colours.label } + 1) % Colours.ALL.size])
-        }
         Key("LOGIN", modifier, size = 14) { login() }
         Key("⚙", Modifier.weight(0.6f), size = 22) { settingsOpen = true }
     }
@@ -912,6 +909,14 @@ private fun Live(s: Session) {
             T("How fast it flows now, every second.", Color(0xFFF2DDB4), 12)
             T(ms.trim(), Cyan, 14, oneLine = true)
             T("How long the last picture took to come after it was asked for.", Color(0xFFF2DDB4), 12)
+            T("FRAMES PER SECOND: fewer cost less data", AmberDim, 12)
+            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                FPS.forEachIndexed { i, (label, _) -> Key(label, Modifier.weight(1f), active = i == fpsIndex, size = 12, padH = 1) { fpsIndex = i } }
+            }
+            T("COLOURS: fewer cost less data (B/W about a sixth of FULL)", AmberDim, 12)
+            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Colours.ALL.forEach { c -> Key(c.label, Modifier.weight(1f), active = c.label == colours.label, size = 11, padH = 1) { setColours(c) } }
+            }
             Key(if (showMeter) "METER ON THE SCREEN: ON" else "METER ON THE SCREEN: OFF", Modifier.fillMaxWidth(), active = showMeter, size = 14) {
                 showMeter = !showMeter; s.prefs?.edit()?.putBoolean("meter_on", showMeter)?.apply()
             }
