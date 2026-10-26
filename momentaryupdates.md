@@ -92,3 +92,5 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 **Status, 26.10.2026 06:50:** both done in v12, seen on the phone.
 > at the top, when cyan numbers are running, you need to add at the top of the screen the status of colors and the status of frames per second
 > so you don't call it anymore matter on screen. They are not matters. It's a status line on top of the screen. You can call it status line on off
+
+**Status, 26.10.2026 06:52:** both done in v13 (colours and FPS on the status line; "STATUS LINE: ON / OFF"), seen on the phone.
