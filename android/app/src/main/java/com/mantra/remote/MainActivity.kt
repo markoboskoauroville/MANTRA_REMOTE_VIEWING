@@ -128,6 +128,7 @@ private fun helpText(label: String): String {
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
+        l == "⚙" -> "Settings: the meter of the link with its meaning, the meter on the screen on or off, and ✕ QUIT, which closes the link, switches Tailscale off and quits the app."
         l == "☰" -> "MENU: the keys below become the Mac's menu bar keys. The menu bar of the app in front opens (even when it hides itself); ← → go from menu to menu, ↑ ↓ through the items, ⏎ CHOOSE picks, ☰ OPEN opens it again, ✕ EXIT closes the menus and brings your keys back."
         l == "⇄" -> "Switches the picture between the two screens: the BenQ and the MacBook Pro. The small word under it is the screen you are watching now."
         l.contains("FULL") || l == "⛶" -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
@@ -823,13 +824,20 @@ private fun Live(s: Session) {
     val close: @Composable () -> Unit = {
         Key("✕", Modifier.width(56.dp)) { s.hangUp() }
     }
+    // the meter's numbers always take the same width, so no digit runs left and right as they change (Marko, 26.10.2026)
+    val meterTexts = { listOf(
+        "VNC %7.2f MB  ↓%7.2f ↑%5.2f".format((rx + tx) / 1e6, rx / 1e6, tx / 1e6),
+        "%6d kbit/s".format(kbps),
+        "%5d ms".format(s.lastMs.coerceIn(0, 99999)),
+    ) }
     val meter: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            T("VNC %.2f MB  ↓%.2f ↑%.2f".format((rx + tx) / 1e6, rx / 1e6, tx / 1e6), Cyan, 13)
-            T("$kbps kbit/s", Cyan, 13)
-            T("${s.lastMs} ms", Cyan, 13)
+            meterTexts().forEach { T(it, Cyan, 13, oneLine = true) }
         }
     }
+    // the meter on the screen, or only in ⚙ (Marko, 26.10.2026: "I can disable this speed status line")
+    var showMeter by remember { mutableStateOf(s.prefs?.getBoolean("meter_on", true) ?: true) }
+    var settingsOpen by remember { mutableStateOf(false) }
     val modKeys: @Composable () -> Unit = {
         // as on a MacBook Pro's bottom row: control, option, command; shift after (Marko, 25.10.2026)
         MOD_KEYS.forEach { (label, k, name) ->
@@ -870,7 +878,7 @@ private fun Live(s: Session) {
     val typing: @Composable () -> Unit = {
         if (keyboard) TypingField(onText = { typeText(it) }, onBackspace = { tapKey(K_BACKSPACE) })
     }
-    val toggles: @Composable (Modifier) -> Unit = { modifier ->
+    val toggles: @Composable RowScope.(Modifier) -> Unit = { modifier ->
         // FPS first, the keyboard where FPS was, drawn as a keyboard (Marko, 26.10.2026)
         Key("${FPS[fpsIndex].first} FPS", modifier, size = 14, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
         Key("SCROLL", modifier, active = scrollMode, size = 14) { scrollMode = !scrollMode }
@@ -879,6 +887,7 @@ private fun Live(s: Session) {
             setColours(Colours.ALL[(Colours.ALL.indexOfFirst { it.label == colours.label } + 1) % Colours.ALL.size])
         }
         Key("LOGIN", modifier, size = 14) { login() }
+        Key("⚙", Modifier.weight(0.6f), size = 22) { settingsOpen = true }
     }
     val views: @Composable RowScope.() -> Unit = {
         // LANDSCAPE left the row (Marko, 25.10.2026: "more space for the letters"); FULL SCREEN is the sideways view.
@@ -889,6 +898,28 @@ private fun Live(s: Session) {
         Key("⇄", Modifier.weight(0.7f), size = 22, sub = if (monitor == 0) "BENQ" else "MACBOOK", padH = 2) { monitor = 1 - monitor }
         Key("DOCK", Modifier.weight(1f), size = 14) { dock() }
         Key("☰", Modifier.weight(0.6f), size = 22) { menuOn() }
+    }
+
+    // ⚙: the meter, read with its words; the meter on the screen or not; ✕ quits (Marko, 26.10.2026: "quitting the app
+    // is two steps: Settings and then X")
+    if (settingsOpen) Dialog(onDismissRequest = { settingsOpen = false }) {
+        Column(Modifier.background(Bg).border(1.dp, Rule).padding(14.dp).width(300.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            T("── SETTINGS ──", AmberDim, 13)
+            val (vnc, speed, ms) = meterTexts()
+            T(vnc.trim(), Cyan, 14, oneLine = true)
+            T("The picture and the keys of this link: all of it, ↓ from the Mac (the pictures), ↑ to the Mac (keys, clicks).", Color(0xFFF2DDB4), 12)
+            T(speed.trim(), Cyan, 14, oneLine = true)
+            T("How fast it flows now, every second.", Color(0xFFF2DDB4), 12)
+            T(ms.trim(), Cyan, 14, oneLine = true)
+            T("How long the last picture took to come after it was asked for.", Color(0xFFF2DDB4), 12)
+            Key(if (showMeter) "METER ON THE SCREEN: ON" else "METER ON THE SCREEN: OFF", Modifier.fillMaxWidth(), active = showMeter, size = 14) {
+                showMeter = !showMeter; s.prefs?.edit()?.putBoolean("meter_on", showMeter)?.apply()
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Key("BACK", Modifier.weight(1f), size = 14) { settingsOpen = false }
+                Key("✕ QUIT", Modifier.weight(1f), size = 14) { settingsOpen = false; s.hangUp(); activity.finish() }
+            }
+        }
     }
 
     // a long press on FPS: every rate at once, one tap chooses (Marko, 25.10.2026)
@@ -969,10 +1000,9 @@ private fun Live(s: Session) {
             }
         }
         else -> Column(Modifier.fillMaxSize().imePadding()) {
-            Row(Modifier.fillMaxWidth().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                monitors(Modifier.weight(1f)); close()
-            }
-            meter()
+            // MON 1 / MON 2 / ✕ left the top (Marko, 26.10.2026: "everything is down anyway"): ⇄ switches the screens,
+            // ⚙ holds the meter and ✕
+            if (showMeter) meter()
             screen(Modifier.weight(1f).fillMaxWidth())
             travelLine(Modifier.fillMaxWidth())
             if (menuMode) menuPanel() else {
