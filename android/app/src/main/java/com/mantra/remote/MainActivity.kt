@@ -397,25 +397,34 @@ private fun T(text: String, color: Color = Amber, size: Int = 16, bold: Boolean 
 @Composable
 private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = false, size: Int = 16, sub: String? = null, padH: Int = 10, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val view = LocalView.current
+    // v15 (Marko, 26.10.2026: "When I press a button, the symbol ... needs to change color to white for half a
+    // second, so I know I pressed it"): every press lights the symbol white for PRESS_FLASH_MS
+    var flash by remember { mutableStateOf(0) }
+    LaunchedEffect(flash) { if (flash > 0) { kotlinx.coroutines.delay(PRESS_FLASH_MS); flash = 0 } }
+    val lit = flash > 0
     Box(
         modifier
             .height(52.dp)
             .background(if (active) Amber else BgRaised)
-            .border(1.dp, if (active) AmberGlow else Rule)
+            .border(1.dp, if (lit) Color.White else if (active) AmberGlow else Rule)
             .combinedClickable(
-                onLongClick = { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); (onLongClick ?: { helpFor.value = label })() },
-            ) { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() }
+                onLongClick = { flash++; view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); (onLongClick ?: { helpFor.value = label })() },
+            ) { flash++; view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() }
             .padding(horizontal = padH.dp),
         contentAlignment = Alignment.Center,
     ) {
         // a key's word never breaks (Marko, 25.10.2026); a modifier carries its name under the symbol, small
-        if (sub == null) T(label, if (active) Bg else Amber, size, bold = true, oneLine = true)
+        val ink = if (lit) Color.White else if (active) Bg else Amber
+        if (sub == null) T(label, ink, size, bold = true, oneLine = true)
         else Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            T(label, if (active) Bg else Amber, size, bold = true, oneLine = true)
-            T(sub, if (active) Bg else AmberDim, 9, oneLine = true)
+            T(label, ink, size, bold = true, oneLine = true)
+            T(sub, if (lit) Color.White else if (active) Bg else AmberDim, 9, oneLine = true)
         }
     }
 }
+
+/** v15: how long a pressed key's symbol stays white. */
+private const val PRESS_FLASH_MS = 500L
 
 @Composable
 private fun Field(label: String, value: String, secret: Boolean = false, number: Boolean = false, onChange: (String) -> Unit) {
@@ -1118,23 +1127,26 @@ private enum class RailState(val color: Color) {
 @Composable
 private fun ColumnScope.RailKey(word: String, whisper: String?, state: RailState, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val view = LocalView.current
+    var flash by remember { mutableStateOf(0) }
+    LaunchedEffect(flash) { if (flash > 0) { kotlinx.coroutines.delay(PRESS_FLASH_MS); flash = 0 } }
+    val lit = flash > 0
     Column(
         Modifier
             .weight(1f)
             .fillMaxWidth()
             .combinedClickable(
-                onLongClick = { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); (onLongClick ?: { helpFor.value = word })() },
-            ) { if (state != RailState.DEAD) { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() } },
+                onLongClick = { flash++; view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); (onLongClick ?: { helpFor.value = word })() },
+            ) { if (state != RailState.DEAD) { flash++; view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() } },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         val size = if (word.length <= 5) 13 else (13 * 5 / word.length).coerceAtLeast(6)
         androidx.compose.material3.Text(
-            word, color = state.color, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = size.sp,
+            word, color = if (lit) Color.White else state.color, fontFamily = Mono, fontWeight = FontWeight.Bold, fontSize = size.sp,
             letterSpacing = 0.04.em, maxLines = 1, softWrap = false,
         )
         if (whisper != null) androidx.compose.material3.Text(
-            whisper, color = state.color.copy(alpha = 150 / 255f), fontFamily = Mono, fontSize = 9.sp,
+            whisper, color = if (lit) Color.White else state.color.copy(alpha = 150 / 255f), fontFamily = Mono, fontSize = 9.sp,
             maxLines = 1, softWrap = false,
         )
     }
