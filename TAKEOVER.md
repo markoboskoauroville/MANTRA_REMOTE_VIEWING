@@ -1,9 +1,9 @@
-# TAKEOVER: Mantra Remote (Android), state 26.10.2026, v4
+# TAKEOVER: Mantra Remote (Android), state 26.10.2026, v5
 
 **What it is.** An Android app (Kotlin + Compose, `android/`, package `com.mantra.remote`) that controls Marko's Mac from his
 Nothing Phone 2a over the internet. Tailscale carries it (Mac 100.79.251.19, phone 100.67.149.40); the Mac side is Apple
 Screen Sharing on port 5900. The RFB client is our own (`Rfb.kt`): ARD auth (type 30) logs in as the Mac user and shows
-the real desktop (type 2, the VNC password, only sees the lock screen). Release: v4 on GitHub, built on the Mac.
+the real desktop (type 2, the VNC password, only sees the lock screen). Release: v5 on GitHub, built on the Mac.
 
 **Files.**
 - `android/app/src/main/java/com/mantra/remote/Rfb.kt`: the protocol, the encodings (ZRLE, Zlib, Hextile, CopyRect, Raw,
@@ -37,7 +37,9 @@ KEYS, SCROLL, FPS (long press: list), colours (long press: list), LOGIN; ⛶ FUL
 Chrome and iTerm, works in VIEW ONLY). Gestures: 1 finger mouse (tap click, long press drag / right click), 2 zoom, 3 pan.
 
 **Open (next session).**
-0. v4 (26.10.2026): VIEW ONLY blocks only the mouse; ESC, TAB ▶, DOCK proven to pass, a tap on the picture sent no
+0. v5 (26.10.2026): second row FPS, SCROLL, ⌨ (the keyboard, where FPS was), colours, LOGIN; ⏎ in a 36 dp frame
+   (padH 2) so the first row ends inside the 413 dp phone, the others unchanged (Marko's word). Seen on the Nothing.
+   v4 (26.10.2026): VIEW ONLY blocks only the mouse; ESC, TAB ▶, DOCK proven to pass, a tap on the picture sent no
    click (event tap on the Mac). v3 tested 26.10.2026 on the Nothing over Wi-Fi debugging: opened from Tailscale OFF → live in 3 s with no tap;
    DOCK opens/closes the square (portrait and full screen, 3 rounds); Back and swipe-away switch Tailscale off. Not yet
    tried away from home on 4G (Tailscale path only), and not launching an app from the square by touch.

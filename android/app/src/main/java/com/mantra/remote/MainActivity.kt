@@ -118,7 +118,7 @@ private fun helpText(label: String): String {
         l.startsWith("MON 1") -> "Shows monitor 1, the BenQ. Only this monitor's picture travels to the phone, so it costs less data than both. A quick swipe left or right on the picture switches too."
         l.startsWith("MON 2") -> "Shows monitor 2, the MacBook Pro's own screen. Only this monitor's picture travels to the phone."
         l == "✕" -> "Closes the link to the Mac and goes back to the settings page."
-        l.contains("KEYS") -> "Opens the phone's keyboard. What you type is typed on the Mac."
+        l.contains("KEYS") || l == "⌨" -> "Opens the phone's keyboard. What you type is typed on the Mac."
         l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l == "FULL" || l == "65K" || l == "4096" || l == "512" || l == "64" || l == "8" || l == "B/W" || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
@@ -336,7 +336,7 @@ private fun T(text: String, color: Color = Amber, size: Int = 16, bold: Boolean 
 /** A finger-sized key: amber box line, label inside, lit while active. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = false, size: Int = 16, sub: String? = null, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
+private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = false, size: Int = 16, sub: String? = null, padH: Int = 10, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val view = LocalView.current
     Box(
         modifier
@@ -346,7 +346,7 @@ private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = 
             .combinedClickable(
                 onLongClick = { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); (onLongClick ?: { helpFor.value = label })() },
             ) { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onClick() }
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = padH.dp),
         contentAlignment = Alignment.Center,
     ) {
         // a key's word never breaks (Marko, 25.10.2026); a modifier carries its name under the symbol, small
@@ -719,7 +719,8 @@ private fun Live(s: Session) {
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             modKeys()
-            specialKeys.forEach { (label, k) -> Key(label, Modifier.width(60.dp), size = 18) { tapKey(k) } }
+            // ⏎ in a narrow frame, so the whole first row stands inside the phone's 413 dp, ⏎ included (Marko, 26.10.2026)
+            specialKeys.forEach { (label, k) -> Key(label, Modifier.width(if (k == K_RETURN) 36.dp else 60.dp), size = 18, padH = if (k == K_RETURN) 2 else 10) { tapKey(k) } }
         }
     }
     fun typeText(text: String) = text.forEach { ch ->
@@ -744,9 +745,10 @@ private fun Live(s: Session) {
         if (keyboard) TypingField(onText = { typeText(it) }, onBackspace = { tapKey(K_BACKSPACE) })
     }
     val toggles: @Composable (Modifier) -> Unit = { modifier ->
-        Key("KEYS", modifier, active = keyboard, size = 14) { keyboard = !keyboard }
-        Key("SCROLL", modifier, active = scrollMode, size = 14) { scrollMode = !scrollMode }
+        // FPS first, the keyboard where FPS was, drawn as a keyboard (Marko, 26.10.2026)
         Key("${FPS[fpsIndex].first} FPS", modifier, size = 14, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
+        Key("SCROLL", modifier, active = scrollMode, size = 14) { scrollMode = !scrollMode }
+        Key("⌨", modifier, active = keyboard, size = 26) { keyboard = !keyboard }
         Key(colours.label, modifier, size = 14, onLongClick = { coloursMenu = true }) {
             setColours(Colours.ALL[(Colours.ALL.indexOfFirst { it.label == colours.label } + 1) % Colours.ALL.size])
         }

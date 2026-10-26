@@ -32,3 +32,6 @@
 - **Testing keys sent to the Mac while iTerm is in front**: ESC would interrupt the Claude session and ⌘⇧] switch its
   tab. A Quartz event tap with kCGEventTapOptionDefault that logs and returns None for those keycodes (53, 30) proves
   arrival without effect (allowed for python3 on 26.10.2026).
+- **His phone's keyboard is a dictation keyboard that records as soon as it opens** (timer and red dot). A test of ⌨
+  records him; close it with ⌨ again at once, never touch its own buttons. The rows move up while it is open: find
+  a key's place again from a screenshot before the next tap.
