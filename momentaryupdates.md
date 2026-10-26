@@ -132,3 +132,7 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 > "Yes, build that." (Marko, 26.10.2026, about the Mac typing the PIN over its USB cable when the phone cannot be reached after a restart; he also gave the PIN for testing: not used by Claude, a device PIN is his to type)
 
 - The Mac as the way in: when a phone does not answer, Computer Remote asks the Mac (its helper on 8861), which types the PIN into the phone over USB adb. — **Status:** v16 + Dock Switcher v8: after two misses, with a PIN saved, the phone screen asks the Mac (POST 100.79.251.19:8861/unlock, the PIN in the body) at most once a minute; the Mac unlocks the phone on its cable and arms adb 5555 again, then the link connects through Tailscale. The status line says each step. Tested up to the Mac's answer without a PIN; the real unlock waits for Marko to type the PIN in the app.
+
+> "On my Nothing Phone, my app is not updated. It is automatically logging in to the computer. Please make an auto-login option. On the main screen there is a check mark for auto login. I can turn it off so I can choose where I'm logging in, otherwise it goes automatically to one location." (Marko, 26.10.2026)
+
+- AUTO LOGIN, a check mark on the first screen: on, the app goes by itself to one place (the one chosen); off, the first screen stays and he picks the Mac or a phone. — **Status:** in work.
