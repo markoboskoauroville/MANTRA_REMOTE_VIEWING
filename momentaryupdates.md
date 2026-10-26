@@ -94,3 +94,9 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 > so you don't call it anymore matter on screen. They are not matters. It's a status line on top of the screen. You can call it status line on off
 
 **Status, 26.10.2026 06:52:** both done in v13 (colours and FPS on the status line; "STATUS LINE: ON / OFF"), seen on the phone.
+
+## 26.10.2026 — ADB over the tunnel (from the Mantra Manual Camera session)
+
+> "since we now have a tunnel for remote controlling, I also want that remote debugging ADB works over the tunnel. If I'm somewhere on the streets of Croatia, in Zagreb, Rijeka, or Zadar, from this computer you can run ADB on my phone to test the applications live. Please develop this through our tunnel for our computer remote controller. I am not wanted to be connected to this Wi-Fi, so you can use nothing phone for testing applications" (Marko, 26.10.2026)
+
+- ADB from this Mac to the Nothing Phone 2a over Tailscale (100.67.149.40), wherever the phone is: on mobile data, in another city, never on this Wi-Fi. — **Status:** asked.
