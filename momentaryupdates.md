@@ -79,3 +79,4 @@ Accessibility. Not tried: away from home on 4G. The page in `site/` is written b
 > number of colors and FPS can be moved to the settings
 > now the milliseconds. How much time it takes to move the application at fast speed in the setting, it vibrates
 > in the settings, the title of the setting should be aligned to the middle. Align middle, please, and in other menus also align middle
+> there is too much numbers of this sending. Please average it and slowly change the number milliseconds and also make three digits fixed. They are not changing places
