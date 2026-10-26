@@ -122,14 +122,14 @@ private fun helpText(label: String): String {
         l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l == "FULL" || l == "65K" || l == "4096" || l == "512" || l == "64" || l == "8" || l == "B/W" || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
-        l.startsWith("NEXT") || l == "TAB ▶" -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first. It works in VIEW ONLY too."
-        l == "DOCK" -> "Opens the Dock Switcher on the Mac (⌃ tapped twice there): the square of your apps on every screen, with the clock and the weather. Tap an app to launch it or bring it to the front; DOCK again or ESC closes the square. It works in VIEW ONLY too."
+        l.startsWith("NEXT") || l == "TAB ▶" -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first."
+        l == "DOCK" -> "Opens the Dock Switcher on the Mac (⌃ tapped twice there): the square of your apps on every screen, with the clock and the weather. Tap an app to launch it or bring it to the front; DOCK again or ESC closes the square."
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
         l.contains("FULL") -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
         l == "EXIT" -> "Leaves full screen."
-        l.startsWith("VIEW") -> "View only: you can watch, zoom and move around the picture, but nothing reaches the Mac: no click, no key, no scroll. One finger moves the zoomed picture. Tap again to control the Mac."
+        l.startsWith("VIEW") -> "View only: the mouse does not reach the Mac: no click, no drag, no scroll. You can watch, zoom and move around the picture; one finger moves the zoomed picture. The keys still work: ESC, DOCK, TAB ▶, typing, every key. Tap again to use the mouse on the Mac."
         l == "⌘" -> "Command, held down on the Mac while it is lit. Tap it on, then TAB, TAB, TAB walks the app switcher; tap it off to choose. ⌘ on, then Q, then ⌘ off quits an app."
         l == "⌥" -> "Option. Tap it, then the next key: they are pressed together. It turns off after one use."
         l == "⌃" || l == "^" -> "Control. Tap it, then the next key: they are pressed together. It turns off after one use."
@@ -541,8 +541,8 @@ private fun Live(s: Session) {
     // (Marko, 25.10.2026: "go through the tabs", then "the same shortcut doesn't work in iTerm"). Ctrl-Tab was Chrome's only.
     fun nextTab() {
         mods.value = emptySet(); cmdHeld = false
-        listOf(K_CMD, K_SHIFT, K_BRACERIGHT).forEach { rfb.key(it, true, always = true) }
-        listOf(K_BRACERIGHT, K_SHIFT, K_CMD).forEach { rfb.key(it, false, always = true) }
+        listOf(K_CMD, K_SHIFT, K_BRACERIGHT).forEach { rfb.key(it, true) }
+        listOf(K_BRACERIGHT, K_SHIFT, K_CMD).forEach { rfb.key(it, false) }
     }
 
     // DOCK: ⌃ tapped twice, the Dock Switcher's square (Marko, 26.10.2026: "an action button to open the dock so I can
@@ -551,9 +551,9 @@ private fun Live(s: Session) {
     fun dock() {
         mods.value = emptySet(); releaseCmd()
         Thread {
-            rfb.key(K_CTRL, true, always = true); rfb.key(K_CTRL, false, always = true)
+            rfb.key(K_CTRL, true); rfb.key(K_CTRL, false)
             Thread.sleep(150)
-            rfb.key(K_CTRL, true, always = true); rfb.key(K_CTRL, false, always = true)
+            rfb.key(K_CTRL, true); rfb.key(K_CTRL, false)
         }.start()
     }
 

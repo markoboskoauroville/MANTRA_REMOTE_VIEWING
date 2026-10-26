@@ -138,7 +138,10 @@ class Rfb(
 
     // ---------------------------------------------------------------- input, sent from the UI thread
 
-    /** VIEW ONLY: nothing reaches the Mac, not a click, not a key (Marko, 25.10.2026). */
+    /**
+     * VIEW ONLY: the mouse does not reach the Mac, no click, no drag, no scroll (Marko, 25.10.2026); the keys always do
+     * (Marko, 26.10.2026: "mouse actions are view only, and keyboard actions are always on").
+     */
     @Volatile var viewOnly = false
 
     /**
@@ -157,8 +160,8 @@ class Rfb(
         it.writeShort(y.coerceIn(0, (height - 1).coerceAtLeast(0)))
     }
 
-    /** [always]: a key that passes even VIEW ONLY (CHROME ▶, the next tab, only changes what is watched). */
-    fun key(keysym: Int, down: Boolean, always: Boolean = false) = if (viewOnly && !always) Unit else send(burst = true) {
+    /** A key, in VIEW ONLY too. */
+    fun key(keysym: Int, down: Boolean) = send(burst = true) {
         it.writeByte(4); it.writeByte(if (down) 1 else 0); it.writeShort(0); it.writeInt(keysym)
     }
 

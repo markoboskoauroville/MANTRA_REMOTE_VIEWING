@@ -29,3 +29,6 @@
 - **The Dock Switcher's square once stayed open** through ⌃⌃ and ESC from the phone, while his clock app (Timer
   Stopwatch Clock, a floating full-screen window) was in front; the `community.auroville.dockswitcher.close`
   notification closed it, and after that DOCK opened and closed it every time. Cause not found.
+- **Testing keys sent to the Mac while iTerm is in front**: ESC would interrupt the Claude session and ⌘⇧] switch its
+  tab. A Quartz event tap with kCGEventTapOptionDefault that logs and returns None for those keycodes (53, 30) proves
+  arrival without effect (allowed for python3 on 26.10.2026).
