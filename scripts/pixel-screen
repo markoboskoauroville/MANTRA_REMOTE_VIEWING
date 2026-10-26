@@ -8,6 +8,8 @@
 SERIAL=${PIXEL_SERIAL:-41241FDH2S10SJ}
 ADB=~/Library/Android/sdk/platform-tools/adb
 if [[ "$1" == stop ]]; then pkill -f "scrcpy -s .*--window-title PIXEL 7"; echo "pixel-screen stopped"; exit 0; fi
+# pixel-screen           the normal window (the Mac pointer free)
+# pixel-screen mouse     a real mouse on the phone (captured; Left Option frees it)
 # no cable: the home Wi-Fi address first (straight, fastest at home), then the tunnel (anywhere)
 if ! $ADB -s $SERIAL get-state >/dev/null 2>&1; then
   SERIAL=""
@@ -18,7 +20,13 @@ if ! $ADB -s $SERIAL get-state >/dev/null 2>&1; then
   [[ -z $SERIAL ]] && { echo "the Pixel answers neither on the Wi-Fi nor through the tunnel (adb tcpip 5555 lost by a restart?)"; exit 1; }
 fi
 pkill -f "scrcpy -s .*--window-title PIXEL 7" 2>/dev/null
-nohup scrcpy -s $SERIAL --window-title "PIXEL 7 · MOUSE + KEYBOARD" --no-audio --max-size 1200 \
-      --mouse=uhid --keyboard=uhid >/tmp/pixel-screen.log 2>&1 &
+# Marko, 26.10.2026: "my screen copy is always in this mouse mode, which is very annoying ... How to switch between
+# two modes": by default the Mac's pointer stays free (a click is a tap, a drag a swipe; works from Computer Remote
+# too) and the keyboard types into the phone; `pixel-screen mouse` gives the phone a real mouse (its arrow; the
+# window holds the pointer until Left Option)
+if [[ "$1" == mouse ]]; then MODE="--mouse=uhid"; TITLE="PIXEL 7 · PHONE MOUSE (Left Option frees it)"
+else MODE="--mouse=sdk"; TITLE="PIXEL 7"; fi
+nohup scrcpy -s $SERIAL --window-title "$TITLE" --no-audio --max-size 1200 \
+      $MODE --keyboard=uhid >/tmp/pixel-screen.log 2>&1 &
 disown
 echo "pixel-screen on $SERIAL (log /tmp/pixel-screen.log)"
