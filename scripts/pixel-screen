@@ -1,0 +1,16 @@
+#!/bin/zsh
+# pixel-screen — the Pixel 7's screen on the Mac with a real mouse and keyboard (Marko, 26.10.2026: "I want to see my
+# mouse on the screen ... I press and I drag, and it acts like ... keeping my left mouse button down ... create both a
+# remote keyboard and a remote mouse"). scrcpy's UHID mode: Android sees a USB mouse and keyboard, draws the mouse
+# arrow, a press-and-drag is the left button held, the Mac keyboard types into the phone (the PIN too, typed by him).
+# The window catches the mouse while you work in it; Left Option or Left Cmd lets it go. Stop: pixel-screen stop.
+# The cable first, else the tunnel (Tailscale, adb on 5555).
+SERIAL=${PIXEL_SERIAL:-41241FDH2S10SJ}
+ADB=~/Library/Android/sdk/platform-tools/adb
+if [[ "$1" == stop ]]; then pkill -f "scrcpy -s .*--window-title PIXEL 7"; echo "pixel-screen stopped"; exit 0; fi
+$ADB -s $SERIAL get-state >/dev/null 2>&1 || { SERIAL=100.70.23.53:5555; $ADB connect $SERIAL >/dev/null 2>&1; }
+pkill -f "scrcpy -s .*--window-title PIXEL 7" 2>/dev/null
+nohup scrcpy -s $SERIAL --window-title "PIXEL 7 · MOUSE + KEYBOARD" --no-audio --max-size 1200 \
+      --mouse=uhid --keyboard=uhid >/tmp/pixel-screen.log 2>&1 &
+disown
+echo "pixel-screen on $SERIAL (log /tmp/pixel-screen.log)"
