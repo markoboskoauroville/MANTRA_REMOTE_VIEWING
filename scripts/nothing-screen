@@ -1,0 +1,29 @@
+#!/bin/zsh
+# nothing-screen — the Nothing's screen on the Mac through the tunnel, wherever the phone is (Marko, 26.10.2026:
+# "please also make screen copy work over tunnel, so my phone is still on the screen when I'm away").
+# Tailscale keeps one address (100.67.149.40) at home and away, so the window is scrcpy on that address; when the
+# phone switches Wi-Fi <-> mobile data the stream may break, and this loop reconnects adb and reopens the window.
+# The picture is light (900 px, 15 fps, 2 Mbit/s) so the SIM is not wasted. Stop: nothing-screen stop.
+ADDR=${NOTHING_ADDR:-100.67.149.40:5555}
+PID=/tmp/nothing-screen.pid
+ADB=~/Library/Android/sdk/platform-tools/adb
+if [[ "$1" == stop ]]; then
+  [[ -f $PID ]] && kill $(cat $PID) 2>/dev/null; pkill -f "scrcpy -s $ADDR"; rm -f $PID; echo "nothing-screen stopped"; exit 0
+fi
+if [[ -f $PID ]] && kill -0 $(cat $PID) 2>/dev/null; then echo "nothing-screen already runs (pid $(cat $PID))"; exit 0; fi
+pkill -f "scrcpy -s $ADDR" 2>/dev/null
+(
+  echo $$ > $PID
+  while true; do
+    $ADB connect $ADDR >/dev/null 2>&1
+    if $ADB -s $ADDR get-state >/dev/null 2>&1; then
+      echo "$(date '+%H:%M:%S') window open"
+      scrcpy -s $ADDR --window-title "NOTHING · REMOTE" --no-audio --max-size 900 --max-fps 15 \
+             --video-bit-rate 2M --stay-awake >/dev/null 2>&1
+      echo "$(date '+%H:%M:%S') window closed, reopening"
+    fi
+    sleep 3
+  done
+) >> /tmp/nothing-screen.log 2>&1 &
+disown
+echo "nothing-screen on $ADDR (log /tmp/nothing-screen.log)"
