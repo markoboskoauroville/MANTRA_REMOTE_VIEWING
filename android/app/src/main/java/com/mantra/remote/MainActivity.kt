@@ -188,8 +188,15 @@ class MainActivity : ComponentActivity() {
             Hold.session = it
         }
         setContent { App(prefs, session) }
-        // nothing to press: Tailscale on, the Mac found, dialled and logged in (Marko, 26.10.2026)
-        if (!session.wanted && !prefs.getString("password", "").isNullOrEmpty()) session.start()
+        // nothing to press: Tailscale on, the Mac found, dialled and logged in (Marko, 26.10.2026); v16 (Marko,
+        // 26.10.2026: "Please make an auto-login option ... I can turn it off so I can choose where I'm logging in,
+        // otherwise it goes automatically to one location"): only with AUTO LOGIN on, and to the place it names
+        if (!session.wanted && session.phone == null && prefs.getBoolean(AUTO_LOGIN, true)) {
+            val to = prefs.getString(AUTO_TO, "mac") ?: "mac"
+            val phone = Phones.all(prefs).firstOrNull { it.address == to }
+            if (phone != null) session.phone = phone
+            else if (!prefs.getString("password", "").isNullOrEmpty()) session.start()
+        }
     }
 
     override fun onDestroy() {
@@ -427,6 +434,10 @@ private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = 
     }
 }
 
+/** v16: the first screen's AUTO LOGIN check mark, and the place it goes to ("mac" or a phone's address). */
+private const val AUTO_LOGIN = "auto_login"
+private const val AUTO_TO = "auto_to"
+
 /** v15: how long a pressed key's symbol stays white. */
 private const val PRESS_FLASH_MS = 500L
 
@@ -463,6 +474,22 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
     ) {
         T("COMPUTER REMOTE ▊", Amber, 30, bold = true)
         T("v" + BuildConfig.VERSION_NAME, AmberDim, 13)          // the version the person sees (versioning.md §3)
+        // v16: AUTO LOGIN, and where it goes; a CONNECT below makes its place the one it goes to
+        var auto by remember { mutableStateOf(prefs.getBoolean(AUTO_LOGIN, true)) }
+        var autoTo by remember { mutableStateOf(prefs.getString(AUTO_TO, "mac") ?: "mac") }
+        val places = listOf("mac" to "THE MAC") + Phones.all(prefs).map { it.address to it.name }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Key((if (auto) "☑" else "☐") + " AUTO LOGIN", Modifier.weight(1f), active = auto, size = 15) {
+                auto = !auto; prefs.edit().putBoolean(AUTO_LOGIN, auto).apply()
+            }
+            Key("→ " + (places.firstOrNull { it.first == autoTo }?.second ?: "THE MAC"), Modifier.weight(1f), size = 15) {
+                val i = places.indexOfFirst { it.first == autoTo }
+                autoTo = places[(i + 1) % places.size].first; prefs.edit().putString(AUTO_TO, autoTo).apply()
+            }
+        }
+        T(if (auto) "On: at every start the app goes by itself to the place on the right (a tap changes it)."
+          else "Off: the app waits here; choose where to log in.", AmberDim, 12)
         T("── THE MAC ───────────────────", Rule, 16)
         Field("HOST (FOUND BY ITSELF; ONLY IF IT IS NOT)", host) { host = it.trim() }
         Field("PORT", port, number = true) { port = it.filter(Char::isDigit) }
@@ -472,7 +499,8 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
         Spacer(Modifier.height(12.dp))
         Key(if (s.phase == Phase.CONNECTING) "DIALLING …" else "CONNECT", Modifier.fillMaxWidth(), size = 22) {
             if (s.phase == Phase.CONNECTING) return@Key
-            prefs.edit().putString("host", host).putString("port", port).putString("password", password).putString("login", login).putString("user", user).apply()
+            prefs.edit().putString("host", host).putString("port", port).putString("password", password).putString("login", login).putString("user", user)
+                .putString(AUTO_TO, "mac").apply()
             s.start()
         }
         Spacer(Modifier.height(12.dp))
@@ -489,6 +517,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
             Key("CONNECT TO ${p.name}", Modifier.fillMaxWidth(), size = 18) {
                 val q = if (addr != p.address && addr.contains(':')) Phone(p.name, addr).also { Phones.remove(prefs, p); Phones.add(prefs, it) } else p
                 Secrets.putPin(prefs, q.address, pin)
+                prefs.edit().putString(AUTO_TO, q.address).apply()
                 s.phone = q
             }
         }
@@ -982,6 +1011,8 @@ private fun Live(s: Session) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 // QUIT APP on the left, BACK (leaves ⚙) on the right (Marko, 26.10.2026)
                 Key("✕ QUIT APP", Modifier.weight(1f), size = 14) { settingsOpen = false; s.hangUp(); activity.finish() }
+                // v16: the link closed, the first screen back, to choose another place
+                Key("FIRST SCREEN", Modifier.weight(1f), size = 14) { settingsOpen = false; s.phone = null; s.hangUp() }
                 Key("BACK", Modifier.weight(1f), size = 14) { settingsOpen = false }
             }
         }

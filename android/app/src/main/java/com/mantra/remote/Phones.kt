@@ -85,6 +85,8 @@ fun PhoneScreen(phone: Phone, pin: String = "", onMac: () -> Unit) {
     androidx.activity.compose.BackHandler { link?.key("BACK") }
 
     DisposableEffect(phone.address) { onDispose { link?.stop(); link = null } }
+    // v16: a phone is reached through Tailscale: switched on here too (the Mac's FIRST SCREEN or a fresh start leave it off)
+    LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Tailscale.onAndWait(context.applicationContext) } }
     // the status line: what arrives, every second, as on the Mac's
     LaunchedEffect(link) {
         var last = 0L to 0L

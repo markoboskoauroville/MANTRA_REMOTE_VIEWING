@@ -135,4 +135,4 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 
 > "On my Nothing Phone, my app is not updated. It is automatically logging in to the computer. Please make an auto-login option. On the main screen there is a check mark for auto login. I can turn it off so I can choose where I'm logging in, otherwise it goes automatically to one location." (Marko, 26.10.2026)
 
-- AUTO LOGIN, a check mark on the first screen: on, the app goes by itself to one place (the one chosen); off, the first screen stays and he picks the Mac or a phone. — **Status:** in work.
+- AUTO LOGIN, a check mark on the first screen: on, the app goes by itself to one place (the one chosen); off, the first screen stays and he picks the Mac or a phone. — **Status:** v16: the first screen has ☑/☐ AUTO LOGIN and → <place> (a tap steps THE MAC, PIXEL 7, …); a CONNECT makes its place the one auto login goes to; ⚙ has FIRST SCREEN (closes the link, back to the first screen to choose). A phone screen switches Tailscale on itself. Tested on the emulator with tools/fake_vnc.py: on, a restart went straight to the Mac; off, the restart stayed on the first screen.
