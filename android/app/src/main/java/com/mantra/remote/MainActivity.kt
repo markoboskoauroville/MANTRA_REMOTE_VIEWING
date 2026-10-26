@@ -128,6 +128,7 @@ private fun helpText(label: String): String {
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
+        l == "☰" -> "MENU: the keys below become the Mac's menu bar keys. The menu bar of the app in front opens (even when it hides itself); ← → go from menu to menu, ↑ ↓ through the items, ⏎ CHOOSE picks, ☰ OPEN opens it again, ✕ EXIT closes the menus and brings your keys back."
         l == "⇄" -> "Switches the picture between the two screens: the BenQ and the MacBook Pro. The small word under it is the screen you are watching now."
         l.contains("FULL") || l == "⛶" -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
         l == "EXIT" -> "Leaves full screen."
@@ -647,6 +648,40 @@ private fun Live(s: Session) {
     // remote controller for my dock, so I'm not waiting for the dock and trying to find it on screen")
     fun dock() { s.dockOpen = true; s.dockNote = "" }
 
+    // ☰ MENU: the action keys become the menu bar's (Marko, 26.10.2026: "one button, which will switch all of these
+    // action buttons into an action button for the menu bar, and when I exit, my normal action buttons are returning").
+    // The Mac opens the menu by Accessibility; the arrows walk it; EXIT closes the menus the same way, never by ESC.
+    var menuMode by remember { mutableStateOf(false) }
+    fun sisterHost() = s.sisterHost.ifEmpty { MacFinder.MAC_TAILSCALE_IP }
+    fun openMenu() {
+        travelling("MENU BAR")
+        Thread { if (MacSister.menu(sisterHost())) s.landed() else s.pressed = "MENU: THE MAC DID NOT ANSWER" }.start()
+    }
+    fun menuOn() { menuMode = true; mods.value = emptySet(); releaseCmd(); openMenu() }
+    fun menuOff() {
+        menuMode = false
+        travelling("MENU CLOSED")
+        Thread { if (MacSister.menuClose(sisterHost())) s.landed() else s.pressed = "" }.start()
+    }
+    val menuPanel: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth().padding(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Key("ESC", Modifier.weight(1f), size = 18) { tapKey(K_ESC) }
+                Key("↑", Modifier.weight(1f), size = 26) { tapKey(K_UP) }
+                Key("☰ OPEN", Modifier.weight(1f), size = 16) { openMenu() }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Key("←", Modifier.weight(1f), size = 26) { tapKey(K_LEFT) }
+                Key("↓", Modifier.weight(1f), size = 26) { tapKey(K_DOWN) }
+                Key("→", Modifier.weight(1f), size = 26) { tapKey(K_RIGHT) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Key("⏎ CHOOSE", Modifier.weight(2f), size = 16) { tapKey(K_RETURN) }
+                Key("✕ EXIT", Modifier.weight(1f), active = true, size = 16) { menuOff() }
+            }
+        }
+    }
+
     val activity = LocalContext.current as ComponentActivity
     // full screen is always landscape; otherwise the phone stands as Marko chose (portrait by default)
     LaunchedEffect(s.full, s.landscape) {
@@ -853,6 +888,7 @@ private fun Live(s: Session) {
         Key("TAB ▶", Modifier.weight(1.1f), size = 14) { nextTab() }
         Key("⇄", Modifier.weight(0.7f), size = 22, sub = if (monitor == 0) "BENQ" else "MACBOOK", padH = 2) { monitor = 1 - monitor }
         Key("DOCK", Modifier.weight(1f), size = 14) { dock() }
+        Key("☰", Modifier.weight(0.6f), size = 22) { menuOn() }
     }
 
     // a long press on FPS: every rate at once, one tap chooses (Marko, 25.10.2026)
@@ -939,9 +975,11 @@ private fun Live(s: Session) {
             meter()
             screen(Modifier.weight(1f).fillMaxWidth())
             travelLine(Modifier.fillMaxWidth())
-            keysRow()
-            Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { toggles(Modifier.weight(1f)) }
-            Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { views() }
+            if (menuMode) menuPanel() else {
+                keysRow()
+                Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { toggles(Modifier.weight(1f)) }
+                Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { views() }
+            }
             typing()
         }
     }

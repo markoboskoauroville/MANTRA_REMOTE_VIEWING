@@ -1,9 +1,9 @@
 # MANTRA REMOTE
 
-**The Android app, v8 (26.10.2026):** `android/`, the phone controls the Mac with Apple Screen Sharing, logged in as
+**The Android app, v9 (26.10.2026):** `android/`, the phone controls the Mac with Apple Screen Sharing, logged in as
 Marko, two monitors, gestures, a held link in the background. Nothing to type: opening the app switches the phone's
 Tailscale on, finds the Mac (home Wi-Fi by Bonjour, or Tailscale, the first that answers) and logs in; closing it
-switches Tailscale off. DOCK opens the Mac's Dock on the phone, full screen: a tap switches to an app or starts it (with the Dock Switcher v6 on the Mac). VIEW ONLY blocks the mouse only; keys always pass. Home Wi-Fi first, the tunnel only away; a tiny line above the keys shows each key until it lands on the Mac. Release: GitHub v8. How it is built, what is
+switches Tailscale off. DOCK opens the Mac's Dock on the phone, full screen: a tap switches to an app or starts it (with the Dock Switcher v6 on the Mac). VIEW ONLY blocks the mouse only; keys always pass. Home Wi-Fi first, the tunnel only away; a tiny line above the keys shows each key until it lands on the Mac. ☰ turns the keys into the Mac's menu bar keys (opened by Accessibility). Release: GitHub v9. How it is built, what is
 open: [TAKEOVER.md](TAKEOVER.md); what was learned: [LESSONS.md](LESSONS.md).
 
 >>> **START HERE IN ANY NEW SESSION: [FEATURE_REQUEST.md](FEATURE_REQUEST.md)**

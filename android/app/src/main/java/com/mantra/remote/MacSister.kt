@@ -43,6 +43,11 @@ object MacSister {
         BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap()
     }
 
+    /** The front app's menu bar opened at its own menu, by Accessibility on the Mac (no ⌃F2: it is off there). */
+    fun menu(host: String): Boolean = get(host, "/menu", 3000) != null
+    /** Every open menu closed (AXCancel), so EXIT never needs an ESC that could land in the app. */
+    fun menuClose(host: String): Boolean = get(host, "/menuclose", 3000) != null
+
     /** Switch to the app, or start it: true when the Mac did it. */
     fun open(host: String, id: String): Boolean = get(host, "/open?id=" + URLEncoder.encode(id, "UTF-8"), 4000) != null
 }

@@ -1,9 +1,9 @@
-# TAKEOVER: Mantra Remote (Android), state 26.10.2026, v8
+# TAKEOVER: Mantra Remote (Android), state 26.10.2026, v9
 
 **What it is.** An Android app (Kotlin + Compose, `android/`, package `com.mantra.remote`) that controls Marko's Mac from his
 Nothing Phone 2a over the internet. Tailscale carries it (Mac 100.79.251.19, phone 100.67.149.40); the Mac side is Apple
 Screen Sharing on port 5900. The RFB client is our own (`Rfb.kt`): ARD auth (type 30) logs in as the Mac user and shows
-the real desktop (type 2, the VNC password, only sees the lock screen). Release: v8 on GitHub, built on the Mac.
+the real desktop (type 2, the VNC password, only sees the lock screen). Release: v9 on GitHub, built on the Mac.
 
 **Files.**
 - `android/app/src/main/java/com/mantra/remote/Rfb.kt`: the protocol, the encodings (ZRLE, Zlib, Hextile, CopyRect, Raw,
@@ -37,7 +37,11 @@ KEYS, SCROLL, FPS (long press: list), colours (long press: list), LOGIN; ⛶ FUL
 Chrome and iTerm, works in VIEW ONLY). Gestures: 1 finger mouse (tap click, long press drag / right click), 2 zoom, 3 pan.
 
 **Open (next session).**
-0. v8 (26.10.2026): DOCK opens the phone's dock (`DockScreen`): the Dock Switcher's apps from `MacSister` (:8861 on
+0. v9 (26.10.2026): ☰ (last row) = MENU mode: the three key rows become ESC ↑ ☰OPEN / ← ↓ → / ⏎CHOOSE ✕EXIT;
+   ☰ asks Dock Switcher v7 `/menu` (AXPress on the front app's menu, menu bar shown even hidden), EXIT `/menuclose`
+   (AXCancel), never ESC. Proven on the phone: iTerm2 menu opened, → Shell, ↓ New Window, EXIT closed, keys back.
+   Portrait only; the full-screen rails have no MENU yet.
+   v8 (26.10.2026): DOCK opens the phone's dock (`DockScreen`): the Dock Switcher's apps from `MacSister` (:8861 on
    the Mac, Dock Switcher v6 `Remote.swift`), cells as square as the screen allows, dot = open, lit = in front; a tap
    = `/open` (switch or start), ⌃⌃ MAC keeps the old way. The landing line now waits on the Mac's own key count
    (`/keys?after=N` long-poll, `Session.watchKeys`), 30–42 ms at home; the picture probe only when the sister is
