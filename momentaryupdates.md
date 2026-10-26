@@ -55,3 +55,4 @@ be made in the app (logged in as Marko), not with the VNC password.
 > please connect this app and my phone with tail scale. When I open the app, tail scale is opening. When I close the app, tail scale is closing
 > please In View Only, the Dock button passes through, the Escape button passes through, and the Next Tab button passes through.
 > Actually, what is disabled in View Only is tapping with the mouse. So mouse actions are view only, and keyboard actions are always on.
+> please Reorder the buttons. Where it says 5 FPS, it should say keys, and instead of writing keys, put the icon of the keyboard.You're going to see that the Enter button is out of the frame if you take the screenshot. So adjust the other buttons accordingly so Enter can fit.
