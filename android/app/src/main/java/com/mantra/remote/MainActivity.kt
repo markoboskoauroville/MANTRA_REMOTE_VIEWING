@@ -833,12 +833,17 @@ private fun Live(s: Session) {
     // the meter's numbers always take the same width, so no digit runs left and right as they change (Marko, 26.10.2026)
     val meterTexts = { listOf(
         "VNC %6.2f MB ↓%6.2f ↑%5.2f".format((rx + tx) / 1e6, rx / 1e6, tx / 1e6),
-        "%6d kbit/s".format(kbps),
+        "%5d kbit/s".format(kbps),
         "%03d ms".format(s.lastMs.coerceIn(0, 999)),          // three digits, zeros in front: 050 ms (Marko, 26.10.2026)
     ) }
+    // the top line: the data, the speed, the time, and since 26.10.2026 the colours and the frames per second (Marko:
+    // "add at the top of the screen the status of colors and the status of frames per second"); the ↓ ↑ split is in ⚙
     val meter: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            meterTexts().forEach { T(it, Cyan, 13, oneLine = true) }
+            T("VNC %6.2f MB".format((rx + tx) / 1e6), Cyan, 13, oneLine = true)
+            meterTexts().drop(1).forEach { T(it, Cyan, 13, oneLine = true) }
+            T("%-5s".format("C" + colours.label), Cyan, 13, oneLine = true)
+            T("%3s FPS".format(FPS[fpsIndex].first), Cyan, 13, oneLine = true)
         }
     }
     // the meter on the screen, or only in ⚙ (Marko, 26.10.2026: "I can disable this speed status line")
