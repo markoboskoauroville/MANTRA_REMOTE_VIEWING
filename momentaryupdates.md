@@ -59,3 +59,4 @@ be made in the app (logged in as Marko), not with the VNC password.
 > Please, on top of all the buttons, add just a tiny text in the middle. When I press a button, there is a delay because the command is traveling. So I want to see that the command is actually pressed.
 > If I press Escape, there will be an Escape status. When the command lands on my computer, the status disappears.
 > Another optimization is that the connection checks whether I'm on the local network. If my computer is on the local network, you don't tunnel, you use the local area network. If I'm not on my local area network, then you use the tunnel VPN.
+> next to the tab icon, i need an icon to switch between screens, the benq and the macbook pro To optimize space in the last row, full screen can be only a symbol. Remove the word "full".
