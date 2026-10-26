@@ -78,3 +78,4 @@ Accessibility. Not tried: away from home on 4G. The page in `site/` is written b
 > put settings in the second row after the login. It is just the icon of the settings. As we have a rule that all buttons do not need to have the same width, in that sense the settings can be smaller in width. C8 or color can also be smaller. That's it
 > number of colors and FPS can be moved to the settings
 > now the milliseconds. How much time it takes to move the application at fast speed in the setting, it vibrates
+> in the settings, the title of the setting should be aligned to the middle. Align middle, please, and in other menus also align middle
