@@ -8,7 +8,15 @@
 SERIAL=${PIXEL_SERIAL:-41241FDH2S10SJ}
 ADB=~/Library/Android/sdk/platform-tools/adb
 if [[ "$1" == stop ]]; then pkill -f "scrcpy -s .*--window-title PIXEL 7"; echo "pixel-screen stopped"; exit 0; fi
-$ADB -s $SERIAL get-state >/dev/null 2>&1 || { SERIAL=100.70.23.53:5555; $ADB connect $SERIAL >/dev/null 2>&1; }
+# no cable: the home Wi-Fi address first (straight, fastest at home), then the tunnel (anywhere)
+if ! $ADB -s $SERIAL get-state >/dev/null 2>&1; then
+  SERIAL=""
+  for A in ${PIXEL_LAN:-192.168.1.101:5555} 100.70.23.53:5555; do
+    $ADB connect $A >/dev/null 2>&1; sleep 1
+    if $ADB -s $A get-state >/dev/null 2>&1; then SERIAL=$A; break; fi
+  done
+  [[ -z $SERIAL ]] && { echo "the Pixel answers neither on the Wi-Fi nor through the tunnel (adb tcpip 5555 lost by a restart?)"; exit 1; }
+fi
 pkill -f "scrcpy -s .*--window-title PIXEL 7" 2>/dev/null
 nohup scrcpy -s $SERIAL --window-title "PIXEL 7 · MOUSE + KEYBOARD" --no-audio --max-size 1200 \
       --mouse=uhid --keyboard=uhid >/tmp/pixel-screen.log 2>&1 &
