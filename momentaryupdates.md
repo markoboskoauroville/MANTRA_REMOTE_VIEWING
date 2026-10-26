@@ -66,3 +66,10 @@ be made in the app (logged in as Marko), not with the VNC password.
 > in the color setting On the screen, there is only a number. Please add C before it so I remember this is a color. In this case, it is C8 right now.also, the app should remember the last monitor and the zoom level and position between restarts, so when it restarts, it comes back to the same point, please
 > Landing detection is not correct. You need to have some sister app on my SwiftStar menu to communicate with this device, because it says "not landed yet", but in this case, if you take a screenshot, it has landed.
 > now I need another feature which is going to open my menu bar if it's hidden. With arrows, I can navigate through the menu bar openings one by one, and then I can go down. Also, an action button. The idea is to have one button, which will switch all of these action buttons into an action button for the menu bar, and when I exit, my normal action buttons are returning
+
+**Status, 26.10.2026 06:45 (session closed):** every request of 26.10.2026 above is done and tested on the Nothing
+Phone 2a over Wi-Fi debugging, released as v3 to v9: DOCK (now the phone's own dock, Dock Switcher v6–v7); Tailscale on
+with the app, off when it closes; the Mac found by itself, home Wi-Fi first and the tunnel only away; VIEW ONLY blocks
+the mouse only; ⌨ where FPS was, ⏎ in a narrow frame; the travelling line, landing confirmed by the Mac's own key count;
+⇄ beside TAB ▶, ⛶ and VIEW alone; C8; monitor/zoom/pan remembered (zoom/pan not yet by his fingers); ☰ MENU mode by
+Accessibility. Not tried: away from home on 4G. The page in `site/` is written but not deployed (site/README.md).
