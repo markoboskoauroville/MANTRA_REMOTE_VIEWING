@@ -106,3 +106,7 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 > "actually, you can switch to that mode right now. When I go outside and just switch to the other connection, the bugging continues without any interruption. Same as with my remote viewer for my computer on my phone, Mantra Remote, this app needs to detect: - If I'm on Wi-Fi, use the Wi-Fi. - If I'm on the internet, use the tunnel. So we never waste the data in vain" (Marko, 26.10.2026)
 
 - ADB to the Nothing stays on one address (the tunnel's) and goes over the Wi-Fi when the phone is on it, over mobile data only when it is not; debugging goes on through the change. — **Status:** in work.
+
+> "I need the same feature on my other app which allows me to remotely access my phone. Not the camera app, the other app. It's running on this phone." (Marko, 26.10.2026 — the same feature: "resolution scaling, in fractions of 0.9, 0.8, 0.7, 0.6 and 0.5. It saves bandwidth with the new setting, and the status line shows the new number.")
+
+- Resolution scaling in Mantra Remote: 1.0, 0.9, 0.8, 0.7, 0.6, 0.5 of the picture; less bandwidth; the status line shows the scale. — **Status:** asked.
