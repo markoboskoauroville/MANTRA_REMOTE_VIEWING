@@ -123,6 +123,7 @@ private fun helpText(label: String): String {
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l == "FULL" || l == "65K" || l == "4096" || l == "512" || l == "64" || l == "8" || l == "B/W" || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
         l.startsWith("NEXT") || l == "TAB ▶" -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first. It works in VIEW ONLY too."
+        l == "DOCK" -> "Opens the Dock Switcher on the Mac (⌃` there): the square of your apps on every screen, with the clock and the weather. Tap an app to launch it or bring it to the front; DOCK again or ESC closes the square. It works in VIEW ONLY too."
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
@@ -386,6 +387,7 @@ private const val K_SHIFT = 0xffe1
 private const val K_BACKSPACE = 0xff08
 private const val K_TAB = 0xff09
 private const val K_BRACERIGHT = 0x7d
+private const val K_GRAVE = 0x60
 private const val K_RETURN = 0xff0d
 private const val K_ESC = 0xff1b
 private const val K_LEFT = 0xff51
@@ -491,6 +493,14 @@ private fun Live(s: Session) {
         mods.value = emptySet(); cmdHeld = false
         listOf(K_CMD, K_SHIFT, K_BRACERIGHT).forEach { rfb.key(it, true, always = true) }
         listOf(K_BRACERIGHT, K_SHIFT, K_CMD).forEach { rfb.key(it, false, always = true) }
+    }
+
+    // DOCK: ⌃`, the Dock Switcher's own shortcut, so the square opens without the double ⌃'s timing (Marko, 26.10.2026:
+    // "an action button to open the dock so I can launch my applications remotely from the phone")
+    fun dock() {
+        mods.value = emptySet(); releaseCmd()
+        rfb.key(K_CTRL, true, always = true); rfb.key(K_GRAVE, true, always = true)
+        rfb.key(K_GRAVE, false, always = true); rfb.key(K_CTRL, false, always = true)
     }
 
     val activity = LocalContext.current as ComponentActivity
@@ -693,6 +703,7 @@ private fun Live(s: Session) {
         Key("⛶ FULL", modifier, active = true, size = 14) { s.full = true }
         Key("VIEW ONLY", modifier, active = viewOnly, size = 14) { viewOnly = !viewOnly }
         Key("TAB ▶", modifier, size = 14) { nextTab() }
+        Key("DOCK", modifier, size = 14) { dock() }
     }
 
     // a long press on FPS: every rate at once, one tap chooses (Marko, 25.10.2026)
@@ -742,6 +753,7 @@ private fun Live(s: Session) {
                 }
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
                 RailKey("NEXT", "TAB", RailState.OFF) { nextTab() }
+                RailKey("DOCK", null, RailState.OFF) { dock() }
                 RailKey("SCROLL", null, if (scrollMode) RailState.ON else RailState.OFF) { scrollMode = !scrollMode }
                 RailKey("FPS", FPS[fpsIndex].first, RailState.OFF, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
                 RailKey("COL", colours.label, RailState.OFF, onLongClick = { coloursMenu = true }) {
