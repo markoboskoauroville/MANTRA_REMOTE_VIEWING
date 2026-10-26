@@ -86,3 +86,4 @@ Accessibility. Not tried: away from home on 4G. The page in `site/` is written b
 **Status, 26.10.2026 06:48:** the requests after the first close are done in v10–v11 and seen on the phone: the top
 buttons gone, the meter steady (fixed widths, ms averaged, 065 ms), switchable in ⚙; ⚙ after LOGIN with the meter
 explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
+> now all the status numbers in settings align to the left edge same alignment for every number
