@@ -53,3 +53,4 @@ be made in the app (logged in as Marko), not with the VNC password.
 > Update is that it must have an action button to open the dock so I can launch my applications remotely from the phone. You just call the button dock.
 > through wireless debugging, you need to find my phone called Nothing Phone 2A and test this app
 > please connect this app and my phone with tail scale. When I open the app, tail scale is opening. When I close the app, tail scale is closing
+> please In View Only, the Dock button passes through, the Escape button passes through, and the Next Tab button passes through.
