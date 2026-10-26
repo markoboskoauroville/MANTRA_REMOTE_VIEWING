@@ -259,6 +259,8 @@ private class Session : Rfb.Listener {
     private var watching = 0
     /** The phone's dock (DOCK): open, and its apps with their icons, kept between openings. */
     var dockOpen by mutableStateOf(false)
+    /** v16: the phone on the screen instead of the Mac (null: the Mac); the Mac's link stays up meanwhile. */
+    var phone by mutableStateOf<Phone?>(null)
     var dockApps by mutableStateOf<List<MacSister.DockApp>>(emptyList())
     var dockNote by mutableStateOf("")
     val icons = androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.graphics.ImageBitmap>()
@@ -932,6 +934,23 @@ private fun Live(s: Session) {
             T("How fast it flows now, every second.", Color(0xFFF2DDB4), 12)
             T(ms, Cyan, 14, oneLine = true)   // padded, never trimmed: the digits stand still
             T("How long the last picture took to come after it was asked for.", Color(0xFFF2DDB4), 12)
+            // v16 (Marko, 26.10.2026: "in the Mantra remote control settings, I want to see all the available devices
+            // I can connect to ... control my computer or the Pixel 7 from my own one app, switching between them")
+            T("DEVICES: a tap shows it on this screen", AmberDim, 12)
+            Key("THE MAC  " + s.host.ifEmpty { "not connected" }, Modifier.fillMaxWidth(), active = s.phone == null, size = 13) {
+                s.phone = null; settingsOpen = false
+            }
+            var phones by remember { mutableStateOf(Phones.all(s.prefs)) }
+            phones.forEach { p ->
+                Key("${p.name}  ${p.address}", Modifier.fillMaxWidth(), active = s.phone == p, size = 13,
+                    onLongClick = { Phones.remove(s.prefs, p); phones = Phones.all(s.prefs) }) { s.phone = p; settingsOpen = false }
+            }
+            var adding by remember { mutableStateOf("") }
+            Field("ADD A PHONE: name address:port (its Tailscale address, adb on 5555); a long press on one removes it", adding) { adding = it }
+            if (adding.trim().contains(' ') && adding.contains(':')) Key("ADD", Modifier.fillMaxWidth(), size = 14) {
+                val name = adding.trim().substringBeforeLast(' ').uppercase(); val addr = adding.trim().substringAfterLast(' ')
+                Phones.add(s.prefs, Phone(name, addr)); phones = Phones.all(s.prefs); adding = ""
+            }
             T("FRAMES PER SECOND: fewer cost less data", AmberDim, 12)
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 FPS.forEachIndexed { i, (label, _) -> Key(label, Modifier.weight(1f), active = i == fpsIndex, size = 12, padH = 1) { fpsIndex = i } }
@@ -1042,6 +1061,7 @@ private fun Live(s: Session) {
             typing()
         }
     }
+    s.phone?.let { p -> PhoneScreen(p, onMac = { s.phone = null }) }
     if (s.dockOpen) DockScreen(s, onMac = { s.dockOpen = false; dockOnMac() }) { app ->
         travelling(app.name)
         s.dockOpen = false

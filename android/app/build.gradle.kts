@@ -44,4 +44,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
+    // v16: the Pixel 7 driven over ADB (scrcpy's picture and touches), the Camera Remote's link
+    implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
+    implementation("org.bouncycastle:bcprov-jdk15to18:1.81")
+    implementation("org.conscrypt:conscrypt-android:2.5.3")
 }
