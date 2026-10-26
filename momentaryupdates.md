@@ -90,3 +90,4 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 > please in settings swap the button placement for quit and app and exit this menu
 
 **Status, 26.10.2026 06:50:** both done in v12, seen on the phone.
+> at the top, when cyan numbers are running, you need to add at the top of the screen the status of colors and the status of frames per second
