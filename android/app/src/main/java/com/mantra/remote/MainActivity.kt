@@ -908,7 +908,10 @@ private fun Live(s: Session) {
     if (settingsOpen) Dialog(onDismissRequest = { settingsOpen = false }) {
         Column(Modifier.background(Bg).border(1.dp, Rule).padding(14.dp).width(300.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { T("── SETTINGS ──", AmberDim, 13) }   // titles in the middle (Marko, 26.10.2026)
-            val (vnc, speed, ms) = meterTexts()
+            // in ⚙ every number starts at the left edge, padded on its right, so the units stand in one column (Marko, 26.10.2026)
+            val vnc = "%-7s MB  ↓ %s  ↑ %s".format("%.2f".format((rx + tx) / 1e6), "%.2f".format(rx / 1e6), "%.2f".format(tx / 1e6))
+            val speed = "%-7s kbit/s".format(kbps)
+            val ms = "%-7s ms".format("%03d".format(s.lastMs.coerceIn(0, 999)))
             T(vnc, Cyan, 14, oneLine = true)   // padded, never trimmed: the digits stand still
             T("The picture and the keys of this link: all of it, ↓ from the Mac (the pictures), ↑ to the Mac (keys, clicks).", Color(0xFFF2DDB4), 12)
             T(speed, Cyan, 14, oneLine = true)   // padded, never trimmed: the digits stand still
