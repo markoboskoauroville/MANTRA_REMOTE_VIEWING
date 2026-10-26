@@ -58,3 +58,4 @@ be made in the app (logged in as Marko), not with the VNC password.
 > please Reorder the buttons. Where it says 5 FPS, it should say keys, and instead of writing keys, put the icon of the keyboard.You're going to see that the Enter button is out of the frame if you take the screenshot. So adjust the other buttons accordingly so Enter can fit.
 > Please, on top of all the buttons, add just a tiny text in the middle. When I press a button, there is a delay because the command is traveling. So I want to see that the command is actually pressed.
 > If I press Escape, there will be an Escape status. When the command lands on my computer, the status disappears.
+> Another optimization is that the connection checks whether I'm on the local network. If my computer is on the local network, you don't tunnel, you use the local area network. If I'm not on my local area network, then you use the tunnel VPN.
