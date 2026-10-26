@@ -75,6 +75,7 @@ class Rfb(
         fun onFrame()                       // pixels changed in the bitmap
         fun onClosed(reason: String)
         fun onStats(bytesIn: Long, frames: Long, lastFrameMs: Long)
+        fun onLanded() {}                   // every key sent so far has been taken in by the Mac
     }
 
     @Volatile var bitmap: Bitmap? = null; private set
@@ -158,6 +159,17 @@ class Rfb(
         it.writeByte(5); it.writeByte(buttons)
         it.writeShort(x.coerceIn(0, (width - 1).coerceAtLeast(0)))
         it.writeShort(y.coerceIn(0, (height - 1).coerceAtLeast(0)))
+    }
+
+    /**
+     * The proof that the keys landed (Marko, 26.10.2026: "When the command lands on my computer, the status disappears").
+     * RFB answers no key, but the Mac reads the link in order: one pixel (0,0), asked for whole right after the keys,
+     * comes back only once the keys before it were taken in. A few bytes each.
+     */
+    private val probes = java.util.concurrent.atomic.AtomicInteger()
+    fun probe() = send {
+        probes.incrementAndGet()
+        it.writeByte(3); it.writeByte(0); it.writeShort(0); it.writeShort(0); it.writeShort(1); it.writeShort(1)
     }
 
     /** A key, in VIEW ONLY too. */
@@ -299,9 +311,11 @@ class Rfb(
         input.skipBytes(1)
         val rects = input.readUnsignedShort()
         var minX = Int.MAX_VALUE; var minY = Int.MAX_VALUE; var maxX = 0; var maxY = 0
+        var probeAnswer = false
         for (i in 0 until rects) {
             val x = input.readUnsignedShort(); val y = input.readUnsignedShort()
             val w = input.readUnsignedShort(); val h = input.readUnsignedShort()
+            if (x == 0 && y == 0 && w > 0 && h > 0) probeAnswer = true
             when (val e = input.readInt()) {
                 0 -> raw(x, y, w, h)
                 1 -> copyRect(x, y, w, h)
@@ -316,6 +330,7 @@ class Rfb(
         if (maxX > minX && maxY > minY) {
             bitmap?.setPixels(pixels, minY * width + minX, width, minX, minY, maxX - minX, maxY - minY)
         }
+        if (probeAnswer && probes.get() > 0 && probes.decrementAndGet() == 0) listener.onLanded()
         frames++
         awaitingFrame = false
         synchronized(requestLock) { requestLock.notifyAll() }

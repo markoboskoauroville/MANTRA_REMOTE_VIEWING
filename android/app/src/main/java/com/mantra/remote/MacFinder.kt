@@ -33,20 +33,37 @@ object MacFinder {
         bonjour.start()
         val pool = Executors.newCachedThreadPool()
         try {
-            val until = System.currentTimeMillis() + timeoutMs
+            val started = System.currentTimeMillis()
+            val until = started + timeoutMs
             while (System.currentTimeMillis() < until) {
                 say("> LOOKING FOR THE MAC: " + candidates.joinToString(", "))
-                // all at once; the first that answers wins, a slow one never holds up a quick one
-                val done = ExecutorCompletionService<String?>(pool)
-                val hosts = candidates.toList()
-                hosts.forEach { host -> done.submit { if (answers(host, port)) host else null } }
-                repeat(hosts.size) { runCatching { done.take().get() }.getOrNull()?.let { return it } }
-                Thread.sleep(1000)
+                // the home Wi-Fi first: while the Mac answers there, no tunnel (Marko, 26.10.2026: "If my computer is on the
+                // local network, you don't tunnel"); Tailscale only after the local ones stayed silent for LAN_FIRST_MS
+                val all = candidates.toList()
+                val local = all.filter(::isLocal)
+                first(pool, local, port)?.let { return it }
+                if (System.currentTimeMillis() - started >= LAN_FIRST_MS) first(pool, all - local.toSet(), port)?.let { return it }
+                Thread.sleep(500)
             }
             return null
         } finally {
             bonjour.stop(); pool.shutdownNow()
         }
+    }
+
+    /** Bonjour needs a moment to hear the Mac; the home address of last time is tried at once. */
+    private const val LAN_FIRST_MS = 3000L
+
+    /** An address on the home network, not through the tunnel. */
+    fun isLocal(host: String) = !host.startsWith("100.") && host != MAC_TAILSCALE_NAME && !host.endsWith(".ts.net")
+
+    /** All at once; the first that answers wins, a slow one never holds up a quick one. */
+    private fun first(pool: java.util.concurrent.ExecutorService, hosts: List<String>, port: Int): String? {
+        if (hosts.isEmpty()) return null
+        val done = ExecutorCompletionService<String?>(pool)
+        hosts.forEach { host -> done.submit { if (answers(host, port)) host else null } }
+        repeat(hosts.size) { runCatching { done.take().get() }.getOrNull()?.let { return it } }
+        return null
     }
 
     /** The port opens and the server greets as RFB within two seconds. */

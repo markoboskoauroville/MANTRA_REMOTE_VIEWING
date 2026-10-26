@@ -237,6 +237,9 @@ private class Session : Rfb.Listener {
     /** The frame interval Marko chose; the background uses [BACKGROUND_MS] and comes back to this. */
     var fpsMs = 1000L
     var background = false
+    /** The key on its way to the Mac, shown small above the keys until it lands; "" when nothing is travelling. */
+    var pressed by mutableStateOf("")
+    var pressedAt by mutableLongStateOf(0L)
     /** A link is wanted (CONNECT was pressed, ✕ not): a link that falls is dialled again on return. */
     var wanted = false
 
@@ -271,7 +274,8 @@ private class Session : Rfb.Listener {
                 return@Thread
             }
             // the home address is remembered: next time at home it is tried first among the others
-            if (!host.startsWith("100.") && host != MacFinder.MAC_TAILSCALE_NAME) p.edit().putString("lan_host", host).apply()
+            android.util.Log.i("MantraRemote", "the Mac answered at $host (${if (MacFinder.isLocal(host)) "home Wi-Fi" else "Tailscale"})")
+            if (MacFinder.isLocal(host)) p.edit().putString("lan_host", host).apply()
             status = "> DIAL $host:$port"
             val password = p.getString("password", "") ?: ""
             val user = p.getString("user", "markobosko") ?: "markobosko"
@@ -300,6 +304,10 @@ private class Session : Rfb.Listener {
         app?.let(LinkService::start)
     }
     override fun onFrame() { tick++ }
+    override fun onLanded() {
+        android.util.Log.i("MantraRemote", "landed: $pressed in ${System.currentTimeMillis() - pressedAt} ms")
+        pressed = ""
+    }
     override fun onClosed(reason: String) {
         phase = Phase.SETUP; status = reason.uppercase(); statusBad = true
         // in front, a fall is dialled again by itself (Tailscale coming up changes the network under the link);
@@ -444,6 +452,7 @@ private const val K_LEFT = 0xff51
 private const val K_UP = 0xff52
 private const val K_RIGHT = 0xff53
 private const val K_DOWN = 0xff54
+private val KEY_NAMES by lazy { mapOf(K_ESC to "ESC", K_TAB to "TAB", K_RETURN to "⏎", K_BACKSPACE to "⌫", K_LEFT to "←", K_UP to "↑", K_RIGHT to "→", K_DOWN to "↓") }
 
 @Composable
 private fun Live(s: Session) {
@@ -523,15 +532,21 @@ private fun Live(s: Session) {
         m.reversed().forEach { rfb.key(it, false) }
         if (m.isNotEmpty()) mods.value = emptySet()
     }
-    fun tapKey(k: Int) = withMods { rfb.key(k, true); rfb.key(k, false) }
+    // what is on its way, shown above the keys until the Mac has it (Marko, 26.10.2026)
+    fun travelling(label: String) { s.pressed = label; s.pressedAt = System.currentTimeMillis() }
+    fun tapKey(k: Int) {
+        travelling((mods.value.mapNotNull { m -> MOD_KEYS.firstOrNull { it.second == m }?.first } + KEY_NAMES.getOrElse(k) { "KEY" }).joinToString(" "))
+        withMods { rfb.key(k, true); rfb.key(k, false) }
+        rfb.probe()
+    }
     // ⌘ is a toggle held down on the Mac: on, it stays pressed there until tapped off, so ⌘ then TAB, TAB, TAB walks the
     // app switcher and ⌘ off chooses (Marko, 25.10.2026: "make my Command key a toggle"). ⌥ ⌃ ⇧ stay one-shot.
     fun toggleMod(k: Int) {
-        if (k == K_CMD) { cmdHeld = !cmdHeld; rfb.key(K_CMD, cmdHeld) }
+        if (k == K_CMD) { cmdHeld = !cmdHeld; travelling(if (cmdHeld) "⌘ ON" else "⌘ OFF"); rfb.key(K_CMD, cmdHeld); rfb.probe() }
         else {
             // ⌃ is also pressed and let go on the Mac at once, so two taps are the Mac's double ⌃ (the Dock Switcher's
             // square, Marko 25.10.2026: "I double tap, but it does not register"); it still goes with the next key too
-            if (k == K_CTRL && !cmdHeld) { rfb.key(K_CTRL, true); rfb.key(K_CTRL, false) }
+            if (k == K_CTRL && !cmdHeld) { travelling("⌃"); rfb.key(K_CTRL, true); rfb.key(K_CTRL, false); rfb.probe() }
             mods.value = if (k in mods.value) mods.value - k else mods.value + k
         }
     }
@@ -541,8 +556,10 @@ private fun Live(s: Session) {
     // (Marko, 25.10.2026: "go through the tabs", then "the same shortcut doesn't work in iTerm"). Ctrl-Tab was Chrome's only.
     fun nextTab() {
         mods.value = emptySet(); cmdHeld = false
+        travelling("TAB ▶")
         listOf(K_CMD, K_SHIFT, K_BRACERIGHT).forEach { rfb.key(it, true) }
         listOf(K_BRACERIGHT, K_SHIFT, K_CMD).forEach { rfb.key(it, false) }
+        rfb.probe()
     }
 
     // DOCK: ⌃ tapped twice, the Dock Switcher's square (Marko, 26.10.2026: "an action button to open the dock so I can
@@ -550,11 +567,22 @@ private fun Live(s: Session) {
     // Screen Sharing never delivers it (tried 26.10.2026). The pause makes the two taps two, as his finger would.
     fun dock() {
         mods.value = emptySet(); releaseCmd()
+        travelling("DOCK")
         Thread {
             rfb.key(K_CTRL, true); rfb.key(K_CTRL, false)
             Thread.sleep(150)
             rfb.key(K_CTRL, true); rfb.key(K_CTRL, false)
+            rfb.probe()
         }.start()
+    }
+
+    // the tiny line above the keys: what is travelling; gone when it landed, red when it has not after 3 s
+    var late by remember { mutableStateOf(false) }
+    LaunchedEffect(s.pressedAt) { late = false; delay(3000); late = s.pressed.isNotEmpty() }
+    val travelLine: @Composable (Modifier) -> Unit = { modifier ->
+        Box(modifier.height(16.dp), contentAlignment = Alignment.Center) {
+            if (s.pressed.isNotEmpty()) T(if (late) "${s.pressed}  NOT LANDED YET" else "${s.pressed}  →  MAC", if (late) RedAlert else AmberGlow, 11, oneLine = true)
+        }
     }
 
     val activity = LocalContext.current as ComponentActivity
@@ -723,9 +751,9 @@ private fun Live(s: Session) {
             specialKeys.forEach { (label, k) -> Key(label, Modifier.width(if (k == K_RETURN) 36.dp else 60.dp), size = 18, padH = if (k == K_RETURN) 2 else 10) { tapKey(k) } }
         }
     }
-    fun typeText(text: String) = text.forEach { ch ->
+    fun typeChars(text: String) = text.forEach { ch ->
         when (ch) {
-            '\n' -> tapKey(K_RETURN)
+            '\n' -> withMods { rfb.key(K_RETURN, true); rfb.key(K_RETURN, false) }
             else -> withMods {
                 val ks = if (ch.code < 256) ch.code else 0x01000000 + ch.code
                 val shift = ch.isUpperCase() || ch in "~!@#$%^&*()_+{}|:\"<>?"
@@ -735,11 +763,12 @@ private fun Live(s: Session) {
             }
         }
     }
+    fun typeText(text: String) { typeChars(text); if (text.isNotEmpty()) { travelling(if (text.length == 1) text.uppercase() else "TEXT"); rfb.probe() } }
     // LOGIN: the Mac password from the settings, typed into whatever asks for it (lock screen, a dialog), then Return
     fun login() {
         if (s.loginPassword.isEmpty()) return
         mods.value = emptySet(); releaseCmd()
-        typeText(s.loginPassword); tapKey(K_RETURN)
+        typeChars(s.loginPassword); tapKey(K_RETURN); travelling("LOGIN")
     }
     val typing: @Composable () -> Unit = {
         if (keyboard) TypingField(onText = { typeText(it) }, onBackspace = { tapKey(K_BACKSPACE) })
@@ -801,6 +830,7 @@ private fun Live(s: Session) {
             }
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 screen(Modifier.fillMaxSize())
+                travelLine(Modifier.align(Alignment.TopCenter).background(Color(0x99000000)).padding(horizontal = 8.dp))
                 if (keyboard) Box(Modifier.align(Alignment.BottomCenter)) { typing() }
             }
             Column(Modifier.width(76.dp).fillMaxHeight()) {
@@ -844,6 +874,7 @@ private fun Live(s: Session) {
             }
             meter()
             screen(Modifier.weight(1f).fillMaxWidth())
+            travelLine(Modifier.fillMaxWidth())
             keysRow()
             Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { toggles(Modifier.weight(1f)) }
             Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { views(Modifier.weight(1f)) }

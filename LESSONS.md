@@ -35,3 +35,7 @@
 - **His phone's keyboard is a dictation keyboard that records as soon as it opens** (timer and red dot). A test of ⌨
   records him; close it with ⌨ again at once, never touch its own buttons. The rows move up while it is open: find
   a key's place again from a screenshot before the next tap.
+- **Never tap the phone by remembered coordinates while the picture may still be loading**: the rows moved, my taps hit
+  ⌨ and the colours, his dictation keyboard heard him and the app typed his words ("two more requests, please") into
+  iTerm on the Mac. Screenshot right before every tap; stop tapping while he holds the phone.
+- **The first full picture of MON 2 (3024x1964) takes about 8 s at home**; until then the picture is black.
