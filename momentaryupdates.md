@@ -100,3 +100,9 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 > "since we now have a tunnel for remote controlling, I also want that remote debugging ADB works over the tunnel. If I'm somewhere on the streets of Croatia, in Zagreb, Rijeka, or Zadar, from this computer you can run ADB on my phone to test the applications live. Please develop this through our tunnel for our computer remote controller. I am not wanted to be connected to this Wi-Fi, so you can use nothing phone for testing applications" (Marko, 26.10.2026)
 
 - ADB from this Mac to the Nothing Phone 2a over Tailscale (100.67.149.40), wherever the phone is: on mobile data, in another city, never on this Wi-Fi. — **Status:** done 26.10.2026. `scripts/nothing-adb` (on the PATH): ADB through Tailscale on 100.67.149.40:5555. adbd in TCP mode (wireless debugging dies off Wi-Fi; TCP mode listens on every network until a restart; `nothing-adb arm` re-arms it once on the Wi-Fi or the cable). PROVEN 07:38: the phone's Wi-Fi switched off over the tunnel (a timer on the phone switched it back on 75 s later), on mobile data `getprop` answered through Tailscale in 21 s.
+
+> "while I'm still here, please test ADB debugging over tunnel VPN" (Marko, 26.10.2026)
+>
+> "actually, you can switch to that mode right now. When I go outside and just switch to the other connection, the bugging continues without any interruption. Same as with my remote viewer for my computer on my phone, Mantra Remote, this app needs to detect: - If I'm on Wi-Fi, use the Wi-Fi. - If I'm on the internet, use the tunnel. So we never waste the data in vain" (Marko, 26.10.2026)
+
+- ADB to the Nothing stays on one address (the tunnel's) and goes over the Wi-Fi when the phone is on it, over mobile data only when it is not; debugging goes on through the change. — **Status:** in work.
