@@ -63,3 +63,4 @@ be made in the app (logged in as Marko), not with the VNC password.
 > It should fill up my screen real estate on my phone with the same functions. Then I pick switching or starting, and that's it. It acts the same, but you need to make a special sister app for my dock, which runs from this user interface, please.
 > View only can be a toggle. The two words are toggling, so it is either view. Actually, you can put only "view". Only remove.
 > And for the dock, we need a local dock, emulating the real one. Basically, you need to build a remote controller for my dock, so I'm not waiting for the dock and trying to find it on screen.
+> in the color setting On the screen, there is only a number. Please add C before it so I remember this is a color. In this case, it is C8 right now.also, the app should remember the last monitor and the zoom level and position between restarts, so when it restarts, it comes back to the same point, please
