@@ -269,6 +269,30 @@ class AdbLink(
         send(listOf(keyMessage(0, code), keyMessage(1, code)))
     }
 
+    /** v16: one shell command on the phone over the open ADB connection, its output (null when not connected). */
+    fun shell(cmd: String): String? {
+        val m = manager ?: return null
+        return runCatching {
+            val st = m.openStream("shell:$cmd")
+            try { st.openInputStream().readBytes().toString(Charsets.UTF_8) } finally { runCatching { st.close() } }
+        }.getOrNull()
+    }
+
+    /**
+     * v16 (Marko, 26.10.2026: "if I enter the PIN there, it connects to my phone and unlocks it"): a locked phone is
+     * woken, its PIN pad brought up (wm dismiss-keyguard), the PIN typed and Enter pressed. Only digits pass. True when
+     * the lock screen is gone afterwards. Run off the main thread.
+     */
+    fun unlock(pin: String): Boolean {
+        val digits = pin.filter(Char::isDigit)
+        val locked = shell("dumpsys window | grep -m1 isKeyguardShowing")?.contains("=true") ?: return false
+        if (!locked) return true
+        if (digits.isEmpty()) return false
+        shell("input keyevent KEYCODE_WAKEUP; sleep 0.4; wm dismiss-keyguard; sleep 0.8; input text $digits; sleep 0.2; input keyevent 66")
+        Thread.sleep(1500)
+        return shell("dumpsys window | grep -m1 isKeyguardShowing")?.contains("=false") == true
+    }
+
     /** v16: text typed on this phone, into the field in focus there (scrcpy's INJECT_TEXT, at most 300 bytes). */
     fun text(t: String) {
         val b = t.toByteArray(Charsets.UTF_8).let { if (it.size > 300) it.copyOf(300) else it }

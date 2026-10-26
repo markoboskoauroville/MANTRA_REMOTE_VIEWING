@@ -382,6 +382,8 @@ private fun App(prefs: android.content.SharedPreferences, session: Session) {
             Phase.SETUP, Phase.CONNECTING -> Setup(prefs, session)
             Phase.LIVE -> Live(session)
         }
+        // v16: a phone on the whole screen, over the Mac or over the first screen (a phone needs no Mac)
+        session.phone?.let { p -> PhoneScreen(p, pin = Secrets.pin(prefs, p.address), onMac = { session.phone = null }) }
         HelpPopup()
     }
 }
@@ -456,10 +458,10 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
     var login by remember { mutableStateOf(prefs.getString("login", "") ?: "") }
     var user by remember { mutableStateOf(prefs.getString("user", "markobosko") ?: "markobosko") }
     Column(
-        Modifier.fillMaxSize().imePadding().padding(20.dp),
+        Modifier.fillMaxSize().imePadding().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        T("MANTRA REMOTE ▊", Amber, 34, bold = true)
+        T("COMPUTER REMOTE ▊", Amber, 30, bold = true)
         T("v" + BuildConfig.VERSION_NAME, AmberDim, 13)          // the version the person sees (versioning.md §3)
         T("── THE MAC ───────────────────", Rule, 16)
         Field("HOST (FOUND BY ITSELF; ONLY IF IT IS NOT)", host) { host = it.trim() }
@@ -475,6 +477,21 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
         }
         Spacer(Modifier.height(12.dp))
         T("> " + s.status, if (s.statusBad) RedAlert else GreenOk, 16)
+        // v16 (Marko, 26.10.2026: "On the first screen ... display all available connections. Each one needs a
+        // username and password for a computer, but for the phone it is a PIN"): every phone with its address and PIN
+        Phones.all(prefs).forEach { p ->
+            Spacer(Modifier.height(12.dp))
+            T("── ${p.name} ───────────────────", Rule, 16)
+            var addr by remember(p.address) { mutableStateOf(p.address) }
+            var pin by remember(p.address) { mutableStateOf(Secrets.pin(prefs, p.address)) }
+            Field("ADDRESS (TAILSCALE, ADB ON 5555)", addr) { addr = it.trim() }
+            Field("PIN (UNLOCKS IT ON CONNECTING; KEPT ENCRYPTED ON THIS PHONE)", pin, secret = true, number = true) { pin = it.filter(Char::isDigit) }
+            Key("CONNECT TO ${p.name}", Modifier.fillMaxWidth(), size = 18) {
+                val q = if (addr != p.address && addr.contains(':')) Phone(p.name, addr).also { Phones.remove(prefs, p); Phones.add(prefs, it) } else p
+                Secrets.putPin(prefs, q.address, pin)
+                s.phone = q
+            }
+        }
         Spacer(Modifier.height(16.dp))
         T("Nothing to type: the app switches Tailscale on, finds the Mac on the home Wi-Fi or through Tailscale, " +
             "whichever answers first, and logs in. Closing the app switches Tailscale off.", AmberDim, 13)
@@ -1061,7 +1078,6 @@ private fun Live(s: Session) {
             typing()
         }
     }
-    s.phone?.let { p -> PhoneScreen(p, onMac = { s.phone = null }) }
     if (s.dockOpen) DockScreen(s, onMac = { s.dockOpen = false; dockOnMac() }) { app ->
         travelling(app.name)
         s.dockOpen = false

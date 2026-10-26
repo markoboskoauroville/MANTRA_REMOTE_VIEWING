@@ -66,7 +66,7 @@ object Phones {
  */
 @SuppressLint("ClickableViewAccessibility")
 @Composable
-fun PhoneScreen(phone: Phone, onMac: () -> Unit) {
+fun PhoneScreen(phone: Phone, pin: String = "", onMac: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var status by remember { mutableStateOf("${phone.name}: CONNECTING TO ${phone.address}") }
     var w by remember { mutableIntStateOf(0) }
@@ -86,9 +86,16 @@ fun PhoneScreen(phone: Phone, onMac: () -> Unit) {
     // the status line: what arrives, every second, as on the Mac's
     LaunchedEffect(link) {
         var last = 0L to 0L
+        var unlockTried = false
         while (true) {
             kotlinx.coroutines.delay(1000)
             val a = link ?: continue
+            // v16: the first moment the link is up, a locked phone is opened with its PIN (entered on the first screen)
+            if (a.connected && !unlockTried) {
+                unlockTried = true
+                val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { a.unlock(pin) }
+                if (!ok) status = if (pin.isEmpty()) "${phone.name} IS LOCKED: its PIN on the first screen opens it" else "${phone.name}: THE PIN DID NOT OPEN IT"
+            }
             val now = a.frames.get() to a.bytes.get()
             if (a.connected && a.width > 0) status = "%s · %s · %d fps · %d kbit/s".format(
                 phone.name, a.host, now.first - last.first, ((now.second - last.second) * 8 / 1000).toInt())
