@@ -1,0 +1,28 @@
+#!/bin/sh
+# nothing-adb — ADB to the Nothing Phone 2a through the Tailscale tunnel, wherever it is (Marko, 26.10.2026: "If I'm
+# somewhere on the streets of Croatia, in Zagreb, Rijeka, or Zadar, from this computer you can run ADB on my phone to
+# test the applications live ... use nothing phone for testing applications").
+#
+#   nothing-adb            connect; print the serial to use:  adb -s 100.67.149.40:5555 ...
+#   nothing-adb arm        put the phone's adbd in TCP mode on 5555 (needed again after the phone restarts); the
+#                          phone must be reachable once by wireless debugging (same Wi-Fi) or the cable for this
+#
+# Why 5555 and not wireless debugging's port: Android turns wireless debugging off when the phone leaves Wi-Fi; adbd's
+# TCP mode listens on every network, the tunnel included, until the phone restarts. MEASURED 26.10.2026 07:38: the
+# phone's Wi-Fi off, on mobile data, `adb -s 100.67.149.40:5555 shell` answered through Tailscale in 21 s.
+ADB=${ADB:-$HOME/Library/Android/sdk/platform-tools/adb}
+TS=/Applications/Tailscale.app/Contents/MacOS/Tailscale
+IP=$($TS ip -4 nothing-phone-2a 2>/dev/null | head -1); IP=${IP:-100.67.149.40}
+if [ "$1" = "arm" ]; then
+  WIFI=$($ADB mdns services 2>/dev/null | awk '/_adb-tls-connect/ && /0005534BC000140/ {print $NF; exit}')
+  SERIAL=${WIFI:-0005534BC000140}
+  $ADB connect "$SERIAL" >/dev/null 2>&1
+  $ADB -s "$SERIAL" tcpip 5555 && sleep 3
+fi
+$ADB connect "$IP:5555" >/dev/null 2>&1
+if [ "$($ADB -s "$IP:5555" get-state 2>/dev/null)" = "device" ]; then
+  echo "$IP:5555"
+else
+  echo "nothing-adb: $IP:5555 does not answer — the phone restarted? run: nothing-adb arm (once on the same Wi-Fi or the cable)" >&2
+  exit 1
+fi
