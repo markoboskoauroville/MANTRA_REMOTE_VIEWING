@@ -13,7 +13,7 @@
     </queries>
 
     <application
-        android:label="Mantra Remote"
+        android:label="Computer Remote"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/Theme.Remote"
