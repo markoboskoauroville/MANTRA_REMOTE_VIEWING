@@ -360,7 +360,12 @@ private class Session : Rfb.Listener {
         // behind, on return (onStart)
         if (wanted && !background && redials < MAX_REDIALS) { redials++; main.postDelayed({ if (wanted && phase == Phase.SETUP) start() }, 2000) }
     }
-    override fun onStats(bytesIn: Long, frames: Long, lastFrameMs: Long) { this.frames = frames; lastMs = lastFrameMs }
+    /** The picture's time, averaged over the last pictures, so the meter moves slowly (Marko, 26.10.2026). */
+    @Volatile var avgMs = -1.0
+    override fun onStats(bytesIn: Long, frames: Long, lastFrameMs: Long) {
+        this.frames = frames
+        avgMs = if (avgMs < 0) lastFrameMs.toDouble() else avgMs * 0.9 + lastFrameMs * 0.1
+    }
 }
 
 @Composable
@@ -563,6 +568,7 @@ private fun Live(s: Session) {
             val r = s.baseRx + (s.rfb?.rxBytes?.get() ?: 0)
             val t = s.baseTx + (s.rfb?.txBytes?.get() ?: 0)
             kbps = ((r + t) - last) * 8 / 1000; last = r + t; rx = r; tx = t
+            s.lastMs = s.avgMs.coerceAtLeast(0.0).toLong()           // the averaged time, once a second
             delay(1000)
         }
     }
@@ -828,7 +834,7 @@ private fun Live(s: Session) {
     val meterTexts = { listOf(
         "VNC %6.2f MB ↓%6.2f ↑%5.2f".format((rx + tx) / 1e6, rx / 1e6, tx / 1e6),
         "%6d kbit/s".format(kbps),
-        "%5d ms".format(s.lastMs.coerceIn(0, 99999)),
+        "%3d ms".format(s.lastMs.coerceIn(0, 999)),           // three digits, always in their places
     ) }
     val meter: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -901,7 +907,7 @@ private fun Live(s: Session) {
     // is two steps: Settings and then X")
     if (settingsOpen) Dialog(onDismissRequest = { settingsOpen = false }) {
         Column(Modifier.background(Bg).border(1.dp, Rule).padding(14.dp).width(300.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            T("── SETTINGS ──", AmberDim, 13)
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { T("── SETTINGS ──", AmberDim, 13) }   // titles in the middle (Marko, 26.10.2026)
             val (vnc, speed, ms) = meterTexts()
             T(vnc, Cyan, 14, oneLine = true)   // padded, never trimmed: the digits stand still
             T("The picture and the keys of this link: all of it, ↓ from the Mac (the pictures), ↑ to the Mac (keys, clicks).", Color(0xFFF2DDB4), 12)
@@ -930,7 +936,7 @@ private fun Live(s: Session) {
     // a long press on FPS: every rate at once, one tap chooses (Marko, 25.10.2026)
     if (fpsMenu) Dialog(onDismissRequest = { fpsMenu = false }) {
         Column(Modifier.background(Bg).border(1.dp, Rule).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            T("── FRAMES PER SECOND ──", AmberDim, 13)
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { T("── FRAMES PER SECOND ──", AmberDim, 13) }   // titles in the middle (Marko, 26.10.2026)
             T("How often a new picture of the Mac is fetched. Fewer is cheaper on mobile data.", Color(0xFFF2DDB4), 13, modifier = Modifier.width(220.dp))
             FPS.forEachIndexed { i, (label, _) ->
                 Key("$label FPS", Modifier.width(220.dp), active = i == fpsIndex, size = 18) { fpsIndex = i; fpsMenu = false }
@@ -940,7 +946,7 @@ private fun Live(s: Session) {
 
     if (coloursMenu) Dialog(onDismissRequest = { coloursMenu = false }) {
         Column(Modifier.background(Bg).border(1.dp, Rule).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            T("── COLOURS ──", AmberDim, 13)
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { T("── COLOURS ──", AmberDim, 13) }   // titles in the middle (Marko, 26.10.2026)
             T("How many colours the Mac sends. One full picture of the BenQ: FULL 978 kB, 65 000 524, 4096 427, 512 226, 64 177, 8 and B/W about 160.",
                 Color(0xFFF2DDB4), 13, modifier = Modifier.width(220.dp))
             Colours.ALL.forEach { c ->
@@ -1045,7 +1051,7 @@ private fun DockScreen(s: Session, onMac: () -> Unit, onPick: (MacSister.DockApp
     }
     Column(Modifier.fillMaxSize().background(Bg).padding(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            T("── DOCK ──", AmberDim, 14, modifier = Modifier.weight(1f))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { T("── DOCK ──", AmberDim, 14) }
             Key("⌃⌃ MAC", Modifier.width(96.dp), size = 13) { onMac() }
             Spacer(Modifier.width(6.dp))
             Key("✕", Modifier.width(56.dp)) { s.dockOpen = false }
