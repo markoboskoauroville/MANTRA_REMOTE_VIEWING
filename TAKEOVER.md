@@ -1,4 +1,4 @@
-# TAKEOVER: Mantra Remote (Android), state 26.10.2026, v13
+# TAKEOVER: Mantra Remote VNC (Android), state 27.10.2026, v17 (named Mantra Remote until v16)
 
 **What it is.** An Android app (Kotlin + Compose, `android/`, package `com.mantra.remote`) that controls Marko's Mac from his
 Nothing Phone 2a over the internet. Tailscale carries it (Mac 100.79.251.19, phone 100.67.149.40); the Mac side is Apple
@@ -25,8 +25,8 @@ the real desktop (type 2, the VNC password, only sees the lock screen). Release:
 **Build (manifest android-app.md §1b): the Mac first.**
 
     cd android && JAVA_HOME=$(/usr/libexec/java_home -v 17) ./gradlew --offline -q assembleDebug
-    export ANDROID_SERIAL=100.67.149.40:5555; adb install -r app/build/outputs/apk/debug/<N>-mantra-remote-v<N>.apk
-    gh release create v<N> app/build/outputs/apk/debug/<N>-mantra-remote-v<N>.apk --latest
+    export ANDROID_SERIAL=100.67.149.40:5555; adb install -r app/build/outputs/apk/debug/<N>-mantra-remote-vnc-v<N>.apk
+    gh release create v<N> app/build/outputs/apk/debug/<N>-mantra-remote-vnc-v<N>.apk --latest
 
 Raise `appVersion` in `android/gradle.properties` first (every change a new whole number); the APK name comes from it.
 
@@ -37,6 +37,9 @@ KEYS, SCROLL, FPS (long press: list), colours (long press: list), LOGIN; ⛶ FUL
 Chrome and iTerm, works in VIEW ONLY). Gestures: 1 finger mouse (tap click, long press drag / right click), 2 zoom, 3 pan.
 
 **Open (next session).**
+00. v17 (27.10.2026): renamed Mantra Remote VNC (label, first screen, notification, APK name, site; package unchanged).
+   ⚙ moved to the right end of the last row shown; ⚙ switches ROW 1 KEYS / ROW 2 TOOLS / ROW 3 VIEWS on and off; with all
+   three off, ⚙ floats see-through over the bottom right of the picture. Written in the cloud, not built: build on the Mac.
 0. v13 (26.10.2026): the status line (Marko's word, not "meter") reads VNC MB · kbit/s · ms · C<colours> · <n> FPS,
    fixed slots; the ↓ ↑ split only in ⚙; ⚙ switch "STATUS LINE: ON / OFF" (pref `meter_on`). Seen on the phone.
    v12 (26.10.2026): in ⚙ every number starts at the left edge, padded on its right (`%-7s`), units in one column;

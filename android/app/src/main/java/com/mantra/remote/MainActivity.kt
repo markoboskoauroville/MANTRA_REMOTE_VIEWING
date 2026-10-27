@@ -19,6 +19,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.window.Dialog
@@ -128,7 +129,7 @@ private fun helpText(label: String): String {
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
-        l == "⚙" -> "Settings: the numbers of the status line with their meaning, the frames per second, the colours, the status line at the top on or off, and ✕ QUIT APP, which closes the link, switches Tailscale off and quits the app."
+        l == "⚙" -> "Settings: the numbers of the status line with their meaning, the frames per second, the colours, the status line at the top on or off, the three rows of keys on or off (with all three off, ⚙ stays see-through over the picture), and ✕ QUIT APP, which closes the link, switches Tailscale off and quits the app."
         l == "☰" -> "MENU: the keys below become the Mac's menu bar keys. The menu bar of the app in front opens (even when it hides itself); ← → go from menu to menu, ↑ ↓ through the items, ⏎ CHOOSE picks, ☰ OPEN opens it again, ✕ EXIT closes the menus and brings your keys back."
         l == "⇄" -> "Switches the picture between the two screens: the BenQ and the MacBook Pro. The small word under it is the screen you are watching now."
         l.contains("FULL") || l == "⛶" -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
@@ -438,6 +439,11 @@ private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = 
 private const val AUTO_LOGIN = "auto_login"
 private const val AUTO_TO = "auto_to"
 
+/** v17: the three rows of keys below the picture, each switched on or off in ⚙. */
+private const val ROW_KEYS = "row_keys_on"
+private const val ROW_TOOLS = "row_tools_on"
+private const val ROW_VIEWS = "row_views_on"
+
 /** v15: how long a pressed key's symbol stays white. */
 private const val PRESS_FLASH_MS = 500L
 
@@ -472,7 +478,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
         Modifier.fillMaxSize().imePadding().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        T("COMPUTER REMOTE ▊", Amber, 30, bold = true)
+        T("MANTRA REMOTE VNC ▊", Amber, 30, bold = true)   // v17: the new name (Marko, 27.10.2026)
         T("v" + BuildConfig.VERSION_NAME, AmberDim, 13)          // the version the person sees (versioning.md §3)
         // v16: AUTO LOGIN, and where it goes; a CONNECT below makes its place the one it goes to
         var auto by remember { mutableStateOf(prefs.getBoolean(AUTO_LOGIN, true)) }
@@ -906,6 +912,10 @@ private fun Live(s: Session) {
     // the meter on the screen, or only in ⚙ (Marko, 26.10.2026: "I can disable this speed status line")
     var showMeter by remember { mutableStateOf(s.prefs?.getBoolean("meter_on", true) ?: true) }
     var settingsOpen by remember { mutableStateOf(false) }
+    // v17: each of the three rows can be switched off in ⚙ (Marko, 27.10.2026: "In settings I can disable all the rows")
+    var rowKeys by remember { mutableStateOf(s.prefs?.getBoolean(ROW_KEYS, true) ?: true) }
+    var rowTools by remember { mutableStateOf(s.prefs?.getBoolean(ROW_TOOLS, true) ?: true) }
+    var rowViews by remember { mutableStateOf(s.prefs?.getBoolean(ROW_VIEWS, true) ?: true) }
     val modKeys: @Composable () -> Unit = {
         // as on a MacBook Pro's bottom row: control, option, command; shift after (Marko, 25.10.2026)
         MOD_KEYS.forEach { (label, k, name) ->
@@ -952,8 +962,10 @@ private fun Live(s: Session) {
         Key("SCROLL", modifier, active = scrollMode, size = 14) { scrollMode = !scrollMode }
         Key("⌨", modifier, active = keyboard, size = 26) { keyboard = !keyboard }
         Key("LOGIN", modifier, size = 14) { login() }
-        Key("⚙", Modifier.weight(0.6f), size = 22) { settingsOpen = true }
     }
+    // v17: ⚙ at the right end of the last row that is shown (Marko, 27.10.2026: "the settings gear icon should move to
+    // the last row of action buttons, on the right side")
+    val gear: @Composable RowScope.() -> Unit = { Key("⚙", Modifier.weight(0.6f), size = 22) { settingsOpen = true } }
     val views: @Composable RowScope.() -> Unit = {
         // LANDSCAPE left the row (Marko, 25.10.2026: "more space for the letters"); FULL SCREEN is the sideways view.
         // ⛶ alone, without its word, and ⇄ beside TAB ▶ switches BenQ / MacBook (Marko, 26.10.2026); widths by their words
@@ -968,7 +980,7 @@ private fun Live(s: Session) {
     // ⚙: the meter, read with its words; the meter on the screen or not; ✕ quits (Marko, 26.10.2026: "quitting the app
     // is two steps: Settings and then X")
     if (settingsOpen) Dialog(onDismissRequest = { settingsOpen = false }) {
-        Column(Modifier.background(Bg).border(1.dp, Rule).padding(14.dp).width(300.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.background(Bg).border(1.dp, Rule).verticalScroll(rememberScrollState()).padding(14.dp).width(300.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { T("── SETTINGS ──", AmberDim, 13) }   // titles in the middle (Marko, 26.10.2026)
             // in ⚙ every number starts at the left edge, padded on its right, so the units stand in one column (Marko, 26.10.2026)
             val vnc = "%-7s MB  ↓ %s  ↑ %s".format("%.2f".format((rx + tx) / 1e6), "%.2f".format(rx / 1e6), "%.2f".format(tx / 1e6))
@@ -1007,6 +1019,17 @@ private fun Live(s: Session) {
             }
             Key(if (showMeter) "STATUS LINE: ON" else "STATUS LINE: OFF", Modifier.fillMaxWidth(), active = showMeter, size = 14) {
                 showMeter = !showMeter; s.prefs?.edit()?.putBoolean("meter_on", showMeter)?.apply()
+            }
+            // v17: the rows of keys, each on or off; with all three off ⚙ floats over the picture, to bring them back
+            T("ROWS OF KEYS: with all off, ⚙ stays over the picture", AmberDim, 12)
+            Key(if (rowKeys) "ROW 1 KEYS: ON" else "ROW 1 KEYS: OFF", Modifier.fillMaxWidth(), active = rowKeys, size = 14) {
+                rowKeys = !rowKeys; s.prefs?.edit()?.putBoolean(ROW_KEYS, rowKeys)?.apply()
+            }
+            Key(if (rowTools) "ROW 2 TOOLS: ON" else "ROW 2 TOOLS: OFF", Modifier.fillMaxWidth(), active = rowTools, size = 14) {
+                rowTools = !rowTools; s.prefs?.edit()?.putBoolean(ROW_TOOLS, rowTools)?.apply()
+            }
+            Key(if (rowViews) "ROW 3 VIEWS: ON" else "ROW 3 VIEWS: OFF", Modifier.fillMaxWidth(), active = rowViews, size = 14) {
+                rowViews = !rowViews; s.prefs?.edit()?.putBoolean(ROW_VIEWS, rowViews)?.apply()
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 // QUIT APP on the left, BACK (leaves ⚙) on the right (Marko, 26.10.2026)
@@ -1091,7 +1114,7 @@ private fun Live(s: Session) {
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { toggles(Modifier.weight(1f)) }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { views() }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { views(); gear() }
                 typing()
             }
         }
@@ -1099,12 +1122,28 @@ private fun Live(s: Session) {
             // MON 1 / MON 2 / ✕ left the top (Marko, 26.10.2026: "everything is down anyway"): ⇄ switches the screens,
             // ⚙ holds the meter and ✕
             if (showMeter) meter()
-            screen(Modifier.weight(1f).fillMaxWidth())
+            val noRows = !rowKeys && !rowTools && !rowViews
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                screen(Modifier.fillMaxSize())
+                // v17: every row off, ⚙ stays as a see-through key over the picture (Marko, 27.10.2026: "the settings
+                // icon should stay as a transparent overlay over the pictures ... go back, and return my rows")
+                if (noRows && !menuMode) Box(
+                    Modifier.align(Alignment.BottomEnd).padding(8.dp).size(48.dp).background(Color(0x55000000), CircleShape)
+                        .border(1.dp, Color(0x66FFB000), CircleShape).clickable { settingsOpen = true },
+                    contentAlignment = Alignment.Center,
+                ) { T("⚙", Color(0xAAFFB000), 24, bold = true, oneLine = true) }
+            }
             travelLine(Modifier.fillMaxWidth())
             if (menuMode) menuPanel() else {
-                keysRow()
-                Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { toggles(Modifier.weight(1f)) }
-                Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { views() }
+                // ⚙ goes to the right end of whichever row is the last one shown
+                if (rowKeys) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { keysRow() }
+                    if (!rowTools && !rowViews) Row(Modifier.width(52.dp).padding(end = 4.dp)) { gear() }
+                }
+                if (rowTools) Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    toggles(Modifier.weight(1f)); if (!rowViews) gear()
+                }
+                if (rowViews) Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { views(); gear() }
             }
             typing()
         }

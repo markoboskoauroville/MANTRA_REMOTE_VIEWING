@@ -27,7 +27,7 @@ class LinkService : Service() {
         )
         val n = Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Mantra Remote: link to the Mac")
+            .setContentTitle("Mantra Remote VNC: link to the Mac")
             .setContentText("In the background at 0.2 FPS. Tap to come back.")
             .setContentIntent(open)
             .setOngoing(true)
