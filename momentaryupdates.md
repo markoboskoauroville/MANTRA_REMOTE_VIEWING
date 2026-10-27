@@ -142,3 +142,7 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 
 - The new name: Mantra Remote VNC (the app's label, the first screen's title, the notification, the APK `<N>-mantra-remote-vnc-v<N>.apk`, the site). The package stays `com.mantra.remote`, so the update installs over the old app and keeps its settings. — **Status:** v17 written, not yet built (the build is on the Mac).
 - ⚙ at the right end of the last row of keys; ⚙ has ROW 1 KEYS / ROW 2 TOOLS / ROW 3 VIEWS, each ON or OFF (prefs `row_keys_on`, `row_tools_on`, `row_views_on`); ⚙ always sits at the right of the last row still shown; with all three off, ⚙ is a see-through round key over the bottom right of the picture, which opens settings to bring the rows back. — **Status:** v17 written, not yet built or seen on the phone.
+
+> "Please also change the behavior of the Dock button. Right now the macOS Dock is auto-hiding, so the button should unhide it. One press should hide the Dock and the next press should unhide it, so the button toggles." (Marko, 27.10.2026)
+
+- DOCK toggles the Mac's own Dock hiding: a tap sends ⌥⌘D (macOS's "Turn Dock Hiding On/Off"), so the hidden Dock stays shown, the next tap hides it again; works in VIEW ONLY (a key). The phone's dock (the apps on the whole phone) moved to a long press on DOCK, in the row and on the full-screen rail. — **Status:** v17 written, not yet built or seen on the phone.

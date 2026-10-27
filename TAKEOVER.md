@@ -39,7 +39,8 @@ Chrome and iTerm, works in VIEW ONLY). Gestures: 1 finger mouse (tap click, long
 **Open (next session).**
 00. v17 (27.10.2026): renamed Mantra Remote VNC (label, first screen, notification, APK name, site; package unchanged).
    ⚙ moved to the right end of the last row shown; ⚙ switches ROW 1 KEYS / ROW 2 TOOLS / ROW 3 VIEWS on and off; with all
-   three off, ⚙ floats see-through over the bottom right of the picture. Written in the cloud, not built: build on the Mac.
+   three off, ⚙ floats see-through over the bottom right of the picture. DOCK: a tap = ⌥⌘D (the Mac's Dock hiding off/on),
+   a long press = the phone's dock. Written in the cloud, not built: build on the Mac.
 0. v13 (26.10.2026): the status line (Marko's word, not "meter") reads VNC MB · kbit/s · ms · C<colours> · <n> FPS,
    fixed slots; the ↓ ↑ split only in ⚙; ⚙ switch "STATUS LINE: ON / OFF" (pref `meter_on`). Seen on the phone.
    v12 (26.10.2026): in ⚙ every number starts at the left edge, padded on its right (`%-7s`), units in one column;

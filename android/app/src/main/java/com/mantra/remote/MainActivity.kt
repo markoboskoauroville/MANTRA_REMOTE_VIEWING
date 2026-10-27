@@ -125,7 +125,7 @@ private fun helpText(label: String): String {
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l.removePrefix("C").trim() in setOf("FULL", "65K", "4096", "512", "64", "8", "B/W") || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
         l.startsWith("NEXT") || l == "TAB ▶" -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first."
-        l == "DOCK" -> "The Dock's apps on the whole phone, the Dock Switcher's own list. Tap one: the Mac switches to it, or starts it. A dot: open; lit: in front. ⌃⌃ MAC opens the square on the Mac itself; ✕ or Back closes."
+        l == "DOCK" -> "A tap shows the Mac's Dock, the next tap hides it again (⌥⌘D, the Mac's own Dock hiding on and off). A long press: the Dock's apps on the whole phone, the Dock Switcher's own list. Tap one: the Mac switches to it, or starts it. A dot: open; lit: in front. ⌃⌃ MAC opens the square on the Mac itself; ✕ or Back closes."
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
@@ -560,6 +560,7 @@ private const val K_SHIFT = 0xffe1
 private const val K_BACKSPACE = 0xff08
 private const val K_TAB = 0xff09
 private const val K_BRACERIGHT = 0x7d
+private const val K_D = 0x64
 private const val K_RETURN = 0xff0d
 private const val K_ESC = 0xff1b
 private const val K_LEFT = 0xff51
@@ -717,6 +718,16 @@ private fun Live(s: Session) {
     // DOCK: the Dock's apps on the whole phone, picked here, switched or started on the Mac (Marko, 26.10.2026: "build a
     // remote controller for my dock, so I'm not waiting for the dock and trying to find it on screen")
     fun dock() { s.dockOpen = true; s.dockNote = "" }
+    // v17: DOCK shows or hides the Mac's own Dock, one press each way (Marko, 27.10.2026: "the macOS Dock is
+    // auto-hiding, so the button should unhide it ... the button toggles"): ⌥⌘D, macOS's own "Turn Dock Hiding On/Off".
+    // The phone's dock above moved to a long press on DOCK.
+    fun dockHiding() {
+        mods.value = emptySet(); releaseCmd()
+        travelling("DOCK ⇅")
+        listOf(K_OPT, K_CMD, K_D).forEach { rfb.key(it, true) }
+        listOf(K_D, K_CMD, K_OPT).forEach { rfb.key(it, false) }
+        rfb.probe()
+    }
 
     // ☰ MENU: the action keys become the menu bar's (Marko, 26.10.2026: "one button, which will switch all of these
     // action buttons into an action button for the menu bar, and when I exit, my normal action buttons are returning").
@@ -973,7 +984,7 @@ private fun Live(s: Session) {
         Key("VIEW", Modifier.weight(1f), active = viewOnly, size = 14) { viewOnly = !viewOnly }   // lit = view only (Marko, 26.10.2026)
         Key("TAB ▶", Modifier.weight(1.1f), size = 14) { nextTab() }
         Key("⇄", Modifier.weight(0.7f), size = 22, sub = if (monitor == 0) "BENQ" else "MACBOOK", padH = 2) { monitor = 1 - monitor }
-        Key("DOCK", Modifier.weight(1f), size = 14) { dock() }
+        Key("DOCK", Modifier.weight(1f), size = 14, onLongClick = { dock() }) { dockHiding() }
         Key("☰", Modifier.weight(0.6f), size = 22) { menuOn() }
     }
 
@@ -1089,7 +1100,7 @@ private fun Live(s: Session) {
                 }
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
                 RailKey("NEXT", "TAB", RailState.OFF) { nextTab() }
-                RailKey("DOCK", null, RailState.OFF) { dock() }
+                RailKey("DOCK", null, RailState.OFF, onLongClick = { dock() }) { dockHiding() }
                 RailKey("SCROLL", null, if (scrollMode) RailState.ON else RailState.OFF) { scrollMode = !scrollMode }
                 RailKey("FPS", FPS[fpsIndex].first, RailState.OFF, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
                 RailKey("COL", colours.label, RailState.OFF, onLongClick = { coloursMenu = true }) {
