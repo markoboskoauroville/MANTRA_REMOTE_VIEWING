@@ -127,7 +127,7 @@ private fun helpText(label: String): String {
         l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l.removePrefix("C").trim() in setOf("FULL", "65K", "4096", "512", "64", "8", "B/W") || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
-        l.startsWith("NEXT") || l == "TAB ▶" -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first."
+        l.startsWith("NEXT") || l == "⇥" -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first."
         l == "DOCK" -> "A tap shows the Mac's Dock, the next tap hides it again (⌥⌘D, the Mac's own Dock hiding on and off). A long press: the Dock's apps on the whole phone, the Dock Switcher's own list. Tap one: the Mac switches to it, or starts it. A dot: open; lit: in front. ⌃⌃ MAC opens the square on the Mac itself; ✕ or Back closes."
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
@@ -137,7 +137,7 @@ private fun helpText(label: String): String {
         l == "⇄" -> "Switches the picture between the two screens: the BenQ and the MacBook Pro. The small word under it is the screen you are watching now."
         l.contains("FULL") || l == "⛶" -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
         l == "EXIT" -> "Leaves full screen."
-        l.startsWith("VIEW") -> "View only: the mouse does not reach the Mac: no click, no drag, no scroll. You can watch, zoom and move around the picture; one finger moves the zoomed picture. The keys still work: ESC, DOCK, TAB ▶, typing, every key. Tap again to use the mouse on the Mac."
+        l.startsWith("VIEW") -> "View only: the mouse does not reach the Mac: no click, no drag, no scroll. You can watch, zoom and move around the picture; one finger moves the zoomed picture. The keys still work: ESC, DOCK, ⇥ (next tab), typing, every key. Tap again to use the mouse on the Mac."
         l == "⌘" -> "Command, held down on the Mac while it is lit. Tap it on, then TAB, TAB, TAB walks the app switcher; tap it off to choose. ⌘ on, then Q, then ⌘ off quits an app."
         l == "⌥" -> "Option. Tap it, then the next key: they are pressed together. It turns off after one use."
         l == "⌃" || l == "^" -> "Control. Tap it, then the next key: they are pressed together. It turns off after one use."
@@ -447,6 +447,9 @@ private const val ROW_KEYS = "row_keys_on"
 private const val ROW_TOOLS = "row_tools_on"
 private const val ROW_VIEWS = "row_views_on"
 
+/** v17: the inner side margin of the keys in the two lower rows, narrow so the words fit (Marko, 27.10.2026). */
+private const val ROW_PAD = 3
+
 /** v15: how long a pressed key's symbol stays white. */
 private const val PRESS_FLASH_MS = 500L
 
@@ -701,7 +704,7 @@ private fun Live(s: Session) {
     // (Marko, 25.10.2026: "go through the tabs", then "the same shortcut doesn't work in iTerm"). Ctrl-Tab was Chrome's only.
     fun nextTab() {
         mods.value = emptySet(); cmdHeld = false
-        travelling("TAB ▶")
+        travelling("⇥ NEXT TAB")
         listOf(K_CMD, K_SHIFT, K_BRACERIGHT).forEach { rfb.key(it, true) }
         listOf(K_BRACERIGHT, K_SHIFT, K_CMD).forEach { rfb.key(it, false) }
         rfb.probe()
@@ -1013,28 +1016,31 @@ private fun Live(s: Session) {
     val toggles: @Composable RowScope.(Modifier) -> Unit = { modifier ->
         // FPS first, the keyboard where FPS was, drawn as a keyboard (Marko, 26.10.2026)
         // FPS and the colours live in ⚙ (Marko, 26.10.2026: "number of colors and FPS can be moved to the settings")
-        Key("SCROLL", modifier, active = scrollMode, size = 14) { scrollMode = !scrollMode; if (scrollMode) mouseMode = false }
-        Key("⌨", modifier, active = keyboard, size = 26) { keyboard = !keyboard }
+        // v17: narrow inner margins (ROW_PAD), so the keys take less room (Marko, 27.10.2026)
+        Key("SCROLL", modifier, active = scrollMode, size = 14, padH = ROW_PAD) { scrollMode = !scrollMode; if (scrollMode) mouseMode = false }
+        Key("⌨", modifier, active = keyboard, size = 26, padH = ROW_PAD) { keyboard = !keyboard }
         // v17: 🖱 beside ⌨ (Marko, 27.10.2026: "a keyboard icon ... and next to it there must be a mouse icon")
-        Key("🖱", modifier, active = mouseMode, size = 24) { mouseMode = !mouseMode; if (mouseMode) scrollMode = false }
+        Key("🖱", modifier, active = mouseMode, size = 24, padH = ROW_PAD) { mouseMode = !mouseMode; if (mouseMode) scrollMode = false }
         if (mouseMode) {
             Key("L", Modifier.weight(0.6f), size = 18, sub = "CLICK", padH = 2) { mouseClick(1) }
             Key("R", Modifier.weight(0.6f), size = 18, sub = "CLICK", padH = 2) { mouseClick(4) }
         }
-        Key("LOGIN", modifier, size = 14) { login() }
     }
     // v17: ⚙ at the right end of the last row that is shown (Marko, 27.10.2026: "the settings gear icon should move to
     // the last row of action buttons, on the right side")
-    val gear: @Composable RowScope.() -> Unit = { Key("⚙", Modifier.weight(0.6f), size = 22) { settingsOpen = true } }
+    val gear: @Composable RowScope.() -> Unit = { Key("⚙", Modifier.weight(0.6f), size = 22, padH = ROW_PAD) { settingsOpen = true } }
     val views: @Composable RowScope.() -> Unit = {
         // LANDSCAPE left the row (Marko, 25.10.2026: "more space for the letters"); FULL SCREEN is the sideways view.
         // ⛶ alone, without its word, and ⇄ beside TAB ▶ switches BenQ / MacBook (Marko, 26.10.2026); widths by their words
-        Key("⛶", Modifier.weight(0.6f), active = true, size = 22) { s.full = true }
-        Key("VIEW", Modifier.weight(1f), active = viewOnly, size = 14) { viewOnly = !viewOnly }   // lit = view only (Marko, 26.10.2026)
-        Key("TAB ▶", Modifier.weight(1.1f), size = 14) { nextTab() }
+        // v17: LOGIN moved down here, and TAB ▶ is the keyboard's own tab symbol ⇥ (Marko, 27.10.2026: "just the classic
+        // tab from the keyboard"); every key with narrow inner margins
+        Key("⛶", Modifier.weight(0.6f), active = true, size = 22, padH = ROW_PAD) { s.full = true }
+        Key("VIEW", Modifier.weight(1f), active = viewOnly, size = 14, padH = ROW_PAD) { viewOnly = !viewOnly }   // lit = view only (Marko, 26.10.2026)
+        Key("⇥", Modifier.weight(0.6f), size = 22, padH = ROW_PAD) { nextTab() }
         Key("⇄", Modifier.weight(0.7f), size = 22, sub = if (monitor == 0) "BENQ" else "MACBOOK", padH = 2) { monitor = 1 - monitor }
-        Key("DOCK", Modifier.weight(1f), size = 14, onLongClick = { dock() }) { dockHiding() }
-        Key("☰", Modifier.weight(0.6f), size = 22) { menuOn() }
+        Key("DOCK", Modifier.weight(1f), size = 14, padH = ROW_PAD, onLongClick = { dock() }) { dockHiding() }
+        Key("LOGIN", Modifier.weight(1.05f), size = 14, padH = ROW_PAD) { login() }
+        Key("☰", Modifier.weight(0.6f), size = 22, padH = ROW_PAD) { menuOn() }
     }
 
     // ⚙: the meter, read with its words; the meter on the screen or not; ✕ quits (Marko, 26.10.2026: "quitting the app
@@ -1205,10 +1211,10 @@ private fun Live(s: Session) {
                     Box(Modifier.weight(1f)) { keysRow() }
                     if (!rowTools && !rowViews) Row(Modifier.width(52.dp).padding(end = 4.dp)) { gear() }
                 }
-                if (rowTools) Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (rowTools) Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     toggles(Modifier.weight(1f)); if (!rowViews) gear()
                 }
-                if (rowViews) Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { views(); gear() }
+                if (rowViews) Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) { views(); gear() }
             }
             typing()
         }
