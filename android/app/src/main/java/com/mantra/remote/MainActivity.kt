@@ -122,6 +122,8 @@ private fun helpText(label: String): String {
         l == "✕" -> "Closes the link to the Mac and goes back to the settings page."
         l.contains("KEYS") || l == "⌨" -> "Opens the phone's keyboard. What you type is typed on the Mac."
         l == "🖱" || l == "MOUSE" -> "MOUSE: while it is lit, one finger moves the Mac's pointer to where it touches, without clicking. Three fingers tapped together click, two fingers tapped together right-click, where the pointer stands. Spreading, pinching and three-finger panning still work."
+        l == "L" -> "The Mac's left mouse button, pressed once where the pointer stands (shown while 🖱 MOUSE is lit)."
+        l == "R" -> "The Mac's right mouse button, pressed once where the pointer stands (shown while 🖱 MOUSE is lit)."
         l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l.removePrefix("C").trim() in setOf("FULL", "65K", "4096", "512", "64", "8", "B/W") || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
@@ -670,6 +672,13 @@ private fun Live(s: Session) {
     }
     // what is on its way, shown above the keys until the Mac has it (Marko, 26.10.2026)
     fun travelling(label: String) { s.pressed = label; s.pressedAt = System.currentTimeMillis(); s.pressedBase = s.keysSeen }
+    // v17: the left and right buttons beside 🖱, pressed where the pointer stands (Marko, 27.10.2026: "I tap to the
+    // point, and then I have action buttons for the left and right mouse button"); no pointer yet: the picture's middle
+    fun mouseClick(button: Int) {
+        val (x, y) = mouseAt ?: (rect[0] + rect[2] / 2 to rect[1] + rect[3] / 2)
+        rfb.pointer(x, y, 0); rfb.pointer(x, y, button); rfb.pointer(x, y, 0)
+        travelling(if (button == 1) "CLICK" else "RIGHT CLICK"); rfb.probe()
+    }
     fun tapKey(k: Int) {
         travelling((mods.value.mapNotNull { m -> MOD_KEYS.firstOrNull { it.second == m }?.first } + KEY_NAMES.getOrElse(k) { "KEY" }).joinToString(" "))
         withMods { rfb.key(k, true); rfb.key(k, false) }
@@ -883,8 +892,7 @@ private fun Live(s: Session) {
                         if (at != null && System.currentTimeMillis() - t0 < 400 && multiTravel < 60f) {
                             val button = if (fingers >= 3) 1 else 4
                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                            rfb.pointer(at.first, at.second, 0); rfb.pointer(at.first, at.second, button); rfb.pointer(at.first, at.second, 0)
-                            travelling(if (button == 1) "CLICK" else "RIGHT CLICK"); rfb.probe()
+                            mouseClick(button)
                         }
                         return@awaitEachGesture
                     }
@@ -1009,6 +1017,10 @@ private fun Live(s: Session) {
         Key("⌨", modifier, active = keyboard, size = 26) { keyboard = !keyboard }
         // v17: 🖱 beside ⌨ (Marko, 27.10.2026: "a keyboard icon ... and next to it there must be a mouse icon")
         Key("🖱", modifier, active = mouseMode, size = 24) { mouseMode = !mouseMode; if (mouseMode) scrollMode = false }
+        if (mouseMode) {
+            Key("L", Modifier.weight(0.6f), size = 18, sub = "CLICK", padH = 2) { mouseClick(1) }
+            Key("R", Modifier.weight(0.6f), size = 18, sub = "CLICK", padH = 2) { mouseClick(4) }
+        }
         Key("LOGIN", modifier, size = 14) { login() }
     }
     // v17: ⚙ at the right end of the last row that is shown (Marko, 27.10.2026: "the settings gear icon should move to
@@ -1137,6 +1149,10 @@ private fun Live(s: Session) {
                 }
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
                 RailKey("MOUSE", null, if (mouseMode) RailState.ON else RailState.OFF) { mouseMode = !mouseMode; if (mouseMode) scrollMode = false }
+                if (mouseMode) {
+                    RailKey("L", "CLICK", RailState.OFF) { mouseClick(1) }
+                    RailKey("R", "CLICK", RailState.OFF) { mouseClick(4) }
+                }
                 RailKey("NEXT", "TAB", RailState.OFF) { nextTab() }
                 RailKey("DOCK", null, RailState.OFF, onLongClick = { dock() }) { dockHiding() }
                 RailKey("SCROLL", null, if (scrollMode) RailState.ON else RailState.OFF) { scrollMode = !scrollMode }
