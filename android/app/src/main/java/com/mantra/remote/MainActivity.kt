@@ -121,6 +121,7 @@ private fun helpText(label: String): String {
         l.startsWith("MON 2") -> "Shows monitor 2, the MacBook Pro's own screen. Only this monitor's picture travels to the phone."
         l == "✕" -> "Closes the link to the Mac and goes back to the settings page."
         l.contains("KEYS") || l == "⌨" -> "Opens the phone's keyboard. What you type is typed on the Mac."
+        l == "🖱" || l == "MOUSE" -> "MOUSE: while it is lit, one finger moves the Mac's pointer to where it touches, without clicking. Three fingers tapped together click, two fingers tapped together right-click, where the pointer stands. Spreading, pinching and three-finger panning still work."
         l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l.removePrefix("C").trim() in setOf("FULL", "65K", "4096", "512", "64", "8", "B/W") || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
@@ -593,6 +594,12 @@ private fun Live(s: Session) {
     var pan by remember { mutableStateOf(Offset.Zero) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     var scrollMode by remember { mutableStateOf(false) }
+    // v17: 🖱 MOUSE mode (Marko, 27.10.2026: "any tapping moves the mouse pointer, three fingers click, and two fingers
+    // right click"): one finger only moves the Mac's pointer to where it touches, a tap of three fingers is the left
+    // click and of two fingers the right click, both where the pointer stands; spread, pinch and pan still work.
+    var mouseMode by remember { mutableStateOf(s.prefs?.getBoolean("mouse_mode", false) ?: false) }
+    LaunchedEffect(mouseMode) { s.prefs?.edit()?.putBoolean("mouse_mode", mouseMode)?.apply() }
+    var mouseAt by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // VIEW ONLY is remembered like FPS: watching stays watching after a restart
     var viewOnly by remember { mutableStateOf(s.prefs?.getBoolean("view_only", false) ?: false) }
     LaunchedEffect(rfb, viewOnly) { rfb.viewOnly = viewOnly; s.prefs?.edit()?.putBoolean("view_only", viewOnly)?.apply() }
@@ -787,7 +794,7 @@ private fun Live(s: Session) {
         modifier
             .background(Color.Black)
             .onSizeChanged { viewSize = it }
-            .pointerInput(rect.contentHashCode(), scrollMode, viewOnly) {
+            .pointerInput(rect.contentHashCode(), scrollMode, viewOnly, mouseMode) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     val start = down.position
@@ -797,10 +804,15 @@ private fun Live(s: Session) {
                     var dragging = false
                     var last = start
                     var scrollAcc = 0f
+                    var fingers = 1          // the most fingers down at once in this gesture
+                    var multiTravel = 0f     // how far two or three fingers went: little = a tap, a click in MOUSE mode
+                    val mouse = mouseMode && !viewOnly && !scrollMode
                     while (true) {
                         val event = awaitPointerEvent()
                         val pressed = event.changes.filter { it.pressed }
                         if (pressed.isEmpty()) break
+                        if (pressed.size > fingers) fingers = pressed.size
+                        if (pressed.size >= 2) multiTravel += pressed.maxOf { it.positionChange().getDistance() }
                         // Marko's gestures (25.10.2026): two fingers zoom, three fingers pan, one finger is the mouse.
                         // Nothing done with two or three fingers reaches the Mac.
                         if (pressed.size >= 3) {
@@ -837,7 +849,11 @@ private fun Live(s: Session) {
                             pan = clampPan(pan + c.positionChange())
                             c.consume(); continue
                         }
-                        if (scrollMode) {
+                        if (mouse) {
+                            // MOUSE: the pointer follows the finger, no button; not in the first 80 ms, so the first finger of
+                            // a two- or three-finger tap leaves the pointer where it is
+                            if (moved || System.currentTimeMillis() - t0 > 80) { val at = toFb(p); mouseAt = at; rfb.pointer(at.first, at.second, 0) }
+                        } else if (scrollMode) {
                             // one finger in SCROLL: up and down turn the Mac's wheel
                             scrollAcc += c.positionChange().y
                             val (fx, fy) = toFb(start)
@@ -860,6 +876,18 @@ private fun Live(s: Session) {
                     // the desk: swipe left for the one on the right (MON 2), right for the one on the left (Marko, 25.10.2026)
                     val dx = last.x - start.x; val dy = last.y - start.y
                     val quick = System.currentTimeMillis() - t0 < 400
+                    if (mouse) {
+                        // MOUSE: a short tap of three fingers clicks, of two fingers right-clicks, where the pointer is
+                        if (!multi) { val to = toFb(last); mouseAt = to; rfb.pointer(to.first, to.second, 0); return@awaitEachGesture }
+                        val at = mouseAt
+                        if (at != null && System.currentTimeMillis() - t0 < 400 && multiTravel < 60f) {
+                            val button = if (fingers >= 3) 1 else 4
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            rfb.pointer(at.first, at.second, 0); rfb.pointer(at.first, at.second, button); rfb.pointer(at.first, at.second, 0)
+                            travelling(if (button == 1) "CLICK" else "RIGHT CLICK"); rfb.probe()
+                        }
+                        return@awaitEachGesture
+                    }
                     if (!multi && !dragging && quick && zoom <= 1.01f && abs(dx) > 150f && abs(dx) > 2 * abs(dy)) {
                         val next = (monitor + if (dx < 0) 1 else -1).coerceIn(0, MONITORS.size - 1)
                         if (next != monitor) { view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK); monitor = next }
@@ -891,6 +919,13 @@ private fun Live(s: Session) {
                     dstSize = IntSize((rect[2] * scale()).roundToInt(), (rect[3] * scale()).roundToInt()),
                     filterQuality = FilterQuality.Medium,
                 )
+                // MOUSE: a ring where the Mac's pointer stands, so the finger sees where the click will land
+                val at = mouseAt
+                if (mouseMode && at != null) {
+                    val c = Offset(baseX() + pan.x + (at.first - rect[0]) * scale(), baseY() + pan.y + (at.second - rect[1]) * scale())
+                    drawCircle(Color.Black, 11f, c, style = androidx.compose.ui.graphics.drawscope.Stroke(5f))
+                    drawCircle(Amber, 11f, c, style = androidx.compose.ui.graphics.drawscope.Stroke(2.5f))
+                }
             }
         }
     }
@@ -970,8 +1005,10 @@ private fun Live(s: Session) {
     val toggles: @Composable RowScope.(Modifier) -> Unit = { modifier ->
         // FPS first, the keyboard where FPS was, drawn as a keyboard (Marko, 26.10.2026)
         // FPS and the colours live in ⚙ (Marko, 26.10.2026: "number of colors and FPS can be moved to the settings")
-        Key("SCROLL", modifier, active = scrollMode, size = 14) { scrollMode = !scrollMode }
+        Key("SCROLL", modifier, active = scrollMode, size = 14) { scrollMode = !scrollMode; if (scrollMode) mouseMode = false }
         Key("⌨", modifier, active = keyboard, size = 26) { keyboard = !keyboard }
+        // v17: 🖱 beside ⌨ (Marko, 27.10.2026: "a keyboard icon ... and next to it there must be a mouse icon")
+        Key("🖱", modifier, active = mouseMode, size = 24) { mouseMode = !mouseMode; if (mouseMode) scrollMode = false }
         Key("LOGIN", modifier, size = 14) { login() }
     }
     // v17: ⚙ at the right end of the last row that is shown (Marko, 27.10.2026: "the settings gear icon should move to
@@ -1099,6 +1136,7 @@ private fun Live(s: Session) {
                     RailKey("MON ${i + 1}", m.name.substringAfter(' '), if (monitor == i) RailState.ON else RailState.OFF) { monitor = i }
                 }
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
+                RailKey("MOUSE", null, if (mouseMode) RailState.ON else RailState.OFF) { mouseMode = !mouseMode; if (mouseMode) scrollMode = false }
                 RailKey("NEXT", "TAB", RailState.OFF) { nextTab() }
                 RailKey("DOCK", null, RailState.OFF, onLongClick = { dock() }) { dockHiding() }
                 RailKey("SCROLL", null, if (scrollMode) RailState.ON else RailState.OFF) { scrollMode = !scrollMode }
