@@ -158,3 +158,7 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 > "Please shift the login from the row where it is now down to the bottom row, and try to reduce the width of the buttons by reducing their margins. The tab can also be reduced by just putting the tab symbol there, not the whole tab and the whole shebang, just the classic tab from the keyboard." (Marko, 27.10.2026)
 
 - LOGIN moved to the bottom row (⛶ VIEW ⇥ ⇄ DOCK LOGIN ☰ ⚙); TAB ▶ (next tab) is now the keyboard's tab symbol ⇥; the keys of the two lower rows have 3 dp inner margins (was 10) and 3 dp between them (was 4). — **Status:** v17 written, not yet built or seen on the phone.
+
+> "The mouse clicks are not landing. Please test it yourself. please test it on the other screen, with the help of the worker session on the macbook pro screen, so you don't disturb what's going on on that screen by dead screen, i mean the benq screen" (Marko, 27.10.2026)
+
+- Mouse clicks of 🖱 MOUSE / L / R not landing. — **Status:** first fix pushed: VIEW ONLY (remembered) silently drops every click, so 🖱 now switches VIEW off and VIEW switches 🖱 off, a click in VIEW ONLY says so; the click is now move → 30 ms → press → 50 ms → release instead of three events in one instant. To be tested by the Mac session on MON 2 (MacBook) only, never on the BenQ.

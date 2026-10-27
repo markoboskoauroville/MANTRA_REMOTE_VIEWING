@@ -679,9 +679,21 @@ private fun Live(s: Session) {
     // point, and then I have action buttons for the left and right mouse button"); no pointer yet: the picture's middle
     fun mouseClick(button: Int) {
         val (x, y) = mouseAt ?: (rect[0] + rect[2] / 2 to rect[1] + rect[3] / 2)
-        rfb.pointer(x, y, 0); rfb.pointer(x, y, button); rfb.pointer(x, y, 0)
-        travelling(if (button == 1) "CLICK" else "RIGHT CLICK"); rfb.probe()
+        // VIEW ONLY lets no click through: say so, instead of a click that seems sent (Marko, 27.10.2026: "the mouse
+        // clicks are not landing")
+        if (viewOnly) { travelling("VIEW ONLY: NO CLICK"); return }
+        travelling(if (button == 1) "CLICK" else "RIGHT CLICK")
+        // the pointer goes there first, the button is held 50 ms, as a hand does; a press and a release in the same
+        // instant can be lost on the Mac
+        Thread {
+            rfb.pointer(x, y, 0); Thread.sleep(30)
+            rfb.pointer(x, y, button); Thread.sleep(50)
+            rfb.pointer(x, y, 0); rfb.probe()
+        }.start()
     }
+    // 🖱 and VIEW ONLY exclude each other: the mouse mode is for clicking, VIEW ONLY for never clicking
+    fun setMouse(on: Boolean) { mouseMode = on; if (on) { scrollMode = false; viewOnly = false } }
+    LaunchedEffect(Unit) { if (mouseMode && viewOnly) viewOnly = false }
     fun tapKey(k: Int) {
         travelling((mods.value.mapNotNull { m -> MOD_KEYS.firstOrNull { it.second == m }?.first } + KEY_NAMES.getOrElse(k) { "KEY" }).joinToString(" "))
         withMods { rfb.key(k, true); rfb.key(k, false) }
@@ -1020,7 +1032,7 @@ private fun Live(s: Session) {
         Key("SCROLL", modifier, active = scrollMode, size = 14, padH = ROW_PAD) { scrollMode = !scrollMode; if (scrollMode) mouseMode = false }
         Key("⌨", modifier, active = keyboard, size = 26, padH = ROW_PAD) { keyboard = !keyboard }
         // v17: 🖱 beside ⌨ (Marko, 27.10.2026: "a keyboard icon ... and next to it there must be a mouse icon")
-        Key("🖱", modifier, active = mouseMode, size = 24, padH = ROW_PAD) { mouseMode = !mouseMode; if (mouseMode) scrollMode = false }
+        Key("🖱", modifier, active = mouseMode, size = 24, padH = ROW_PAD) { setMouse(!mouseMode) }
         if (mouseMode) {
             Key("L", Modifier.weight(0.6f), size = 18, sub = "CLICK", padH = 2) { mouseClick(1) }
             Key("R", Modifier.weight(0.6f), size = 18, sub = "CLICK", padH = 2) { mouseClick(4) }
@@ -1035,7 +1047,7 @@ private fun Live(s: Session) {
         // v17: LOGIN moved down here, and TAB ▶ is the keyboard's own tab symbol ⇥ (Marko, 27.10.2026: "just the classic
         // tab from the keyboard"); every key with narrow inner margins
         Key("⛶", Modifier.weight(0.6f), active = true, size = 22, padH = ROW_PAD) { s.full = true }
-        Key("VIEW", Modifier.weight(1f), active = viewOnly, size = 14, padH = ROW_PAD) { viewOnly = !viewOnly }   // lit = view only (Marko, 26.10.2026)
+        Key("VIEW", Modifier.weight(1f), active = viewOnly, size = 14, padH = ROW_PAD) { viewOnly = !viewOnly; if (viewOnly) mouseMode = false }   // lit = view only (Marko, 26.10.2026)
         Key("⇥", Modifier.weight(0.6f), size = 22, padH = ROW_PAD) { nextTab() }
         Key("⇄", Modifier.weight(0.7f), size = 22, sub = if (monitor == 0) "BENQ" else "MACBOOK", padH = 2) { monitor = 1 - monitor }
         Key("DOCK", Modifier.weight(1f), size = 14, padH = ROW_PAD, onLongClick = { dock() }) { dockHiding() }
@@ -1154,7 +1166,7 @@ private fun Live(s: Session) {
                     RailKey("MON ${i + 1}", m.name.substringAfter(' '), if (monitor == i) RailState.ON else RailState.OFF) { monitor = i }
                 }
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
-                RailKey("MOUSE", null, if (mouseMode) RailState.ON else RailState.OFF) { mouseMode = !mouseMode; if (mouseMode) scrollMode = false }
+                RailKey("MOUSE", null, if (mouseMode) RailState.ON else RailState.OFF) { setMouse(!mouseMode) }
                 if (mouseMode) {
                     RailKey("L", "CLICK", RailState.OFF) { mouseClick(1) }
                     RailKey("R", "CLICK", RailState.OFF) { mouseClick(4) }
@@ -1166,7 +1178,7 @@ private fun Live(s: Session) {
                 RailKey("COL", colours.label, RailState.OFF, onLongClick = { coloursMenu = true }) {
                     setColours(Colours.ALL[(Colours.ALL.indexOfFirst { it.label == colours.label } + 1) % Colours.ALL.size])
                 }
-                RailKey("VIEW", "ONLY", if (viewOnly) RailState.ON else RailState.OFF) { viewOnly = !viewOnly }
+                RailKey("VIEW", "ONLY", if (viewOnly) RailState.ON else RailState.OFF) { viewOnly = !viewOnly; if (viewOnly) mouseMode = false }
                 RailKey("EXIT", "FULL", RailState.OFF) { s.full = false }
             }
         }
