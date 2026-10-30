@@ -162,3 +162,7 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 > "The mouse clicks are not landing. Please test it yourself. please test it on the other screen, with the help of the worker session on the macbook pro screen, so you don't disturb what's going on on that screen by dead screen, i mean the benq screen" (Marko, 27.10.2026)
 
 - Mouse clicks of 🖱 MOUSE / L / R not landing. — **Status:** first fix pushed: VIEW ONLY (remembered) silently drops every click, so 🖱 now switches VIEW off and VIEW switches 🖱 off, a click in VIEW ONLY says so; the click is now move → 30 ms → press → 50 ms → release instead of three events in one instant. To be tested by the Mac session on MON 2 (MacBook) only, never on the BenQ.
+
+> "before doing that, we need to update my app on my phone, which is called mantra remote vnc The mouse now has a left and a right button, but it also needs to drag. Drag means pressing the key and keeping it down until I press drag again. So please give me drag as a third control of the mouse. Also, when I press the left mouse button, the application says my click is not landing. Please open this application via wireless debugging on my phone and test it." (Marko, 30.10.2026)
+
+- DRAG beside L and R in 🖱 MOUSE: a toggle; the first press holds the Mac's left button down where the pointer stands, moving the pointer drags, the second press lets it go. And L CLICK says "not landing": test it on the Nothing over wireless debugging. — **Status:** asked.
