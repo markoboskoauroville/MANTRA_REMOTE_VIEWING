@@ -43,3 +43,5 @@
   landed (Marko saw "NOT LANDED YET" with the key done). The Mac's own count of key events (Dock Switcher /keys) is.
 - **Android blocks plain http by default** (targetSdk 35); runCatching hid the error. Log every failure of a network call.
 
+- **(1.11.2026) Releasing a Twilio number throws away the paid rest of its month** (no refund, no way back). Keep a
+  number until just before its next charge, and ask Marko before releasing. See `docs/TWILIO.md`.
