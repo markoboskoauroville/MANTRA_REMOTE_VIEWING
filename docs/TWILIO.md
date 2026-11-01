@@ -6,7 +6,10 @@ Marko's Twilio account (Full, paid by credit). The credentials live only in the 
 ## What the account holds (1.11.2026)
 
 - No phone numbers of its own. `+14155238886` is Twilio's shared WhatsApp sandbox: messages only, **no voice calls**.
-- Voice calls to Croatia (HR, low-risk numbers) switched on 1.11.2026 for the find-my-phone call; still on.
+- Voice calls to Croatia (HR) switched on 1.11.2026 for the find-my-phone call and **kept on deliberately** (Marko's
+  decision): he lives in Croatia and will need it again. Only low-risk numbers (ordinary mobiles and landlines);
+  premium-rate and high-risk toll-fraud numbers stay off. The account is prepaid, so its balance is the most a thief
+  with the token could spend; the real protection is keeping the auth token secret. Do not offer to switch it off again.
 - Balance 18.84 USD after that call (was 19.99).
 
 ## Rule 1: a number is paid by the month, in advance, and releasing it throws the month away
@@ -40,4 +43,4 @@ fields `low_risk_numbers_enabled`, `high_risk_special_numbers_enabled`, `high_ri
 2. Check `voice.twilio.com/v1/DialingPermissions/Countries/HR`; switch on low-risk numbers if off.
 3. `POST Calls.json` with `To`, `From`, `Timeout=60`, `Twiml=<Response><Say loop="3">…</Say></Response>`; poll the call,
    call again until the status is `completed` (answered; voicemail also counts as completed).
-4. Afterwards: end any ringing calls, then Rule 1 (don't release at once, ask), and offer to switch Croatia off again.
+4. Afterwards: end any ringing calls, then Rule 1 (don't release at once, ask). Croatia calls stay on.
