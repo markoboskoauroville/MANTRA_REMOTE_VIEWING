@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -174,7 +175,7 @@ private object Hold {
 }
 
 /** The app closed (Back, or swiped away from the recent apps): the link and Tailscale go off. */
-internal fun closeApp() { Hold.session?.hangUp() }
+internal fun closeApp() { Hold.session?.let { it.hangUp(); it.app?.let { a -> Tailscale.off(a) } } }
 
 private const val MAX_REDIALS = 5
 
@@ -193,15 +194,8 @@ class MainActivity : ComponentActivity() {
             Hold.session = it
         }
         setContent { App(prefs, session) }
-        // nothing to press: Tailscale on, the Mac found, dialled and logged in (Marko, 26.10.2026); v16 (Marko,
-        // 26.10.2026: "Please make an auto-login option ... I can turn it off so I can choose where I'm logging in,
-        // otherwise it goes automatically to one location"): only with AUTO LOGIN on, and to the place it names
-        if (!session.wanted && session.phone == null && prefs.getBoolean(AUTO_LOGIN, true)) {
-            val to = prefs.getString(AUTO_TO, "mac") ?: "mac"
-            val phone = Phones.all(prefs).firstOrNull { it.address == to }
-            if (phone != null) session.phone = phone
-            else if (!prefs.getString("password", "").isNullOrEmpty()) session.start()
-        }
+        // v20: nothing starts by itself; the first page is the list of machines (Marko, 2.11.2026: "I don't need auto
+        // login. Remove the option completely")
     }
 
     override fun onDestroy() {
@@ -357,7 +351,9 @@ private class Session : Rfb.Listener {
     /** ✕ or the app closed: the link is closed on purpose, nothing dials again, the service ends and Tailscale goes off. */
     fun hangUp() {
         wanted = false; attempt++; rfb?.close()
-        app?.let { LinkService.stop(it); Tailscale.off(it) }
+        // v20: closing a machine keeps Tailscale on, so the list beneath it still sees every machine; Tailscale goes
+        // off only when the app closes (closeApp)
+        app?.let { LinkService.stop(it) }
         phase = Phase.SETUP; status = "LINK CLOSED"; statusBad = false
     }
 
@@ -449,9 +445,6 @@ private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = 
     }
 }
 
-/** v16: the first screen's AUTO LOGIN check mark, and the place it goes to ("mac" or a phone's address). */
-private const val AUTO_LOGIN = "auto_login"
-private const val AUTO_TO = "auto_to"
 
 /** v17: the three rows of keys below the picture, each switched on or off in ⚙. */
 private const val ROW_KEYS = "row_keys_on"
@@ -486,116 +479,116 @@ private fun Field(label: String, value: String, secret: Boolean = false, number:
 
 @Composable
 private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
-    var host by remember { mutableStateOf(prefs.getString("host", "mantra-mac") ?: "mantra-mac") }
+    // v20 (Marko, 2.11.2026: "What I want to see on the first page is that Tailscale reads all my machines, and I have a
+    // button for each machine. Then I click on the button and get into the machine. When I close the machine, I get the
+    // list of machines again. In the list of machines, there will also be an X to close the app completely"). AUTO LOGIN
+    // and its "→ THE MAC" are gone ("Remove the option completely"); the passwords wait behind SETTINGS.
+    val activity = LocalContext.current as? android.app.Activity
+    var settings by remember { mutableStateOf(false) }
+    var online by remember { mutableStateOf<List<Tailnet.Place>?>(null) }
+    var looking by remember { mutableStateOf(0) }
+    LaunchedEffect(looking) {
+        online = null
+        online = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Tailscale.onAndWait(s.app ?: return@withContext emptyList()); Tailnet.places(prefs) }
+    }
+    Column(
+        Modifier.fillMaxSize().imePadding().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                T("MANTRA REMOTE VNC ▊", Amber, 26, bold = true)
+                T("v" + BuildConfig.VERSION_NAME, AmberDim, 13)
+            }
+            Key("✕", Modifier.width(60.dp), size = 22) { activity?.finish() }   // closes the app: link, service, Tailscale off
+        }
+        T("── MY MACHINES ─────────────────", Rule, 16)
+        val list = online
+        if (list == null) T("> Tailscale is reading your machines …", AmberDim, 14)
+        else if (list.isEmpty()) T("> no machine answers", RedAlert, 14)
+        else list.forEach { pl -> Machine(pl, busy = s.phase == Phase.CONNECTING) {
+            when {
+                !pl.online -> looking++
+                pl.kind == Tailnet.Kind.MAC -> if (s.phase != Phase.CONNECTING) {
+                    prefs.edit().putString("host", pl.ip).apply(); s.start()
+                }
+                pl.kind == Tailnet.Kind.PHONE -> {
+                    val known = Phones.all(prefs).firstOrNull { it.address.substringBefore(':') == pl.ip }
+                    s.phone = known ?: Phone(pl.name, pl.ip + ":5555").also { Phones.add(prefs, it) }
+                }
+                else -> s.status = "${pl.name}: ENTERING A LINUX MACHINE COMES IN THE NEXT VERSION"
+            }
+        } }
+        Key("↻ LOOK AGAIN", Modifier.fillMaxWidth(), size = 14) { looking++ }
+        if (s.status.isNotEmpty()) T("> " + s.status, if (s.statusBad) RedAlert else GreenOk, 14)
+        Spacer(Modifier.height(8.dp))
+        Key(if (settings) "SETTINGS ▲" else "SETTINGS ▼", Modifier.fillMaxWidth(), size = 14) { settings = !settings }
+        if (settings) SetupSettings(prefs) { looking++ }
+    }
+}
+
+/** v20: one machine, one button: its name, and under it what it is and its Tailscale address. */
+@Composable
+private fun Machine(pl: Tailnet.Place, busy: Boolean, onClick: () -> Unit) {
+    val ink = if (pl.online) Amber else AmberDim
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 72.dp).background(BgRaised).border(1.dp, if (pl.online) AmberGlow else Rule)
+            .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            T((if (pl.online) "● " else "○ ") + pl.name, if (pl.online) GreenOk else AmberDim, 20, bold = true)
+            T(pl.os.lowercase() + "  " + pl.ip, AmberDim, 13)
+        }
+        T(when {
+            !pl.online -> "OFFLINE"
+            busy && pl.kind == Tailnet.Kind.MAC -> "…"
+            pl.kind == Tailnet.Kind.MAC || pl.kind == Tailnet.Kind.PHONE -> "ENTER ▶"
+            else -> "SOON"
+        }, ink, 15, bold = true)
+    }
+}
+
+/** v20: what used to fill the first page, folded away: the Tailscale pass, the Mac's passwords, each phone's PIN. */
+@Composable
+private fun SetupSettings(prefs: android.content.SharedPreferences, reread: () -> Unit) {
     var port by remember { mutableStateOf(prefs.getString("port", "5900") ?: "5900") }
     var password by remember { mutableStateOf(prefs.getString("password", "") ?: "") }
     var login by remember { mutableStateOf(prefs.getString("login", "") ?: "") }
     var user by remember { mutableStateOf(prefs.getString("user", "markobosko") ?: "markobosko") }
-    Column(
-        Modifier.fillMaxSize().imePadding().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        T("MANTRA REMOTE VNC ▊", Amber, 30, bold = true)   // v17: the new name (Marko, 27.10.2026)
-        T("v" + BuildConfig.VERSION_NAME, AmberDim, 13)          // the version the person sees (versioning.md §3)
-        // v18: every place at the top, one button each (Marko, 2.11.2026: "Everything is listed at the top"); Tailnet.kt
-        var online by remember { mutableStateOf<List<Tailnet.Place>?>(null) }
-        var looking by remember { mutableStateOf(0) }
-        LaunchedEffect(looking) {
-            online = null
-            online = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Tailscale.onAndWait(s.app ?: return@withContext emptyList()); Tailnet.places(prefs) }
+    var saved by remember { mutableStateOf(false) }
+    T("── TAILSCALE ──────────────────", Rule, 16)
+    if (Tailnet.keyed(prefs)) {
+        T("The pass is saved (encrypted on this phone): every machine of your tailnet is listed.", AmberDim, 12)
+        Key("FORGET THE PASS", Modifier.fillMaxWidth(), size = 14) {
+            Secrets.putPin(prefs, Tailnet.ID, ""); Secrets.putPin(prefs, Tailnet.SECRET, ""); reread()
         }
-        Spacer(Modifier.height(8.dp))
-        T("── ONLINE ─────────────────────", Rule, 16)
-        val list = online
-        if (list == null) T("> looking in Tailscale …", AmberDim, 14)
-        else if (list.isEmpty()) T("> nothing answers", RedAlert, 14)
-        else list.forEach { pl ->
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                // v19 (Marko, 2.11.2026: "fix the cut of MAC address"): the name over the address, so a portrait phone
-                // shows the whole 100.x address instead of cutting it beside the key
-                Column(Modifier.weight(1.6f)) {
-                    T((if (pl.online) "● " else "○ ") + pl.name, if (pl.online) GreenOk else AmberDim, 16, bold = pl.online, oneLine = true)
-                    T(pl.os.lowercase() + "  " + pl.ip, AmberDim, 12)
-                }
-                when {
-                    !pl.online -> Key("OFFLINE", Modifier.weight(0.8f), size = 14) { looking++ }
-                    pl.kind == Tailnet.Kind.MAC -> Key("CONNECT", Modifier.weight(0.8f), active = true, size = 14) {
-                        if (s.phase == Phase.CONNECTING) return@Key
-                        prefs.edit().putString("host", pl.ip).putString(AUTO_TO, "mac").apply()
-                        s.start()
-                    }
-                    pl.kind == Tailnet.Kind.PHONE -> Key("CONNECT", Modifier.weight(0.8f), active = true, size = 14) {
-                        val known = Phones.all(prefs).firstOrNull { it.address.substringBefore(':') == pl.ip }
-                        val q = known ?: Phone(pl.name, pl.ip + ":5555").also { Phones.add(prefs, it) }
-                        prefs.edit().putString(AUTO_TO, q.address).apply()
-                        s.phone = q
-                    }
-                    else -> Key("SSH SOON", Modifier.weight(0.8f), size = 14) { looking++ }
-                }
-            }
+    } else {
+        T("Without a pass only the machines this app knows. Tailscale admin console → Settings → Trust credentials → " +
+          "OAuth, scope Devices Core: Read; paste both here.", AmberDim, 12)
+        var tid by remember { mutableStateOf("") }
+        var tsec by remember { mutableStateOf("") }
+        Field("TAILSCALE OAUTH CLIENT ID", tid) { tid = it.trim() }
+        Field("TAILSCALE OAUTH CLIENT SECRET", tsec, secret = true) { tsec = it.trim() }
+        if (tid.isNotEmpty() && tsec.isNotEmpty()) Key("SAVE (ENCRYPTED ON THIS PHONE)", Modifier.fillMaxWidth(), size = 14) {
+            Secrets.putPin(prefs, Tailnet.ID, tid); Secrets.putPin(prefs, Tailnet.SECRET, tsec); reread()
         }
-        Key("↻ LOOK AGAIN", Modifier.fillMaxWidth(), size = 14) { looking++ }
-        if (!Tailnet.keyed(prefs)) {
-            T("Only the places this app knows. For every device of your tailnet (the Oracle machine too): Tailscale admin " +
-              "console → Settings → OAuth clients → Generate, scope Devices: Read; paste both here.", AmberDim, 12)
-            var tid by remember { mutableStateOf("") }
-            var tsec by remember { mutableStateOf("") }
-            Field("TAILSCALE OAUTH CLIENT ID", tid) { tid = it.trim() }
-            Field("TAILSCALE OAUTH CLIENT SECRET", tsec, secret = true) { tsec = it.trim() }
-            if (tid.isNotEmpty() && tsec.isNotEmpty()) Key("SAVE (ENCRYPTED ON THIS PHONE)", Modifier.fillMaxWidth(), size = 14) {
-                Secrets.putPin(prefs, Tailnet.ID, tid); Secrets.putPin(prefs, Tailnet.SECRET, tsec); looking++
-            }
-        }
-        // v16: AUTO LOGIN, and where it goes; a CONNECT below makes its place the one it goes to
-        var auto by remember { mutableStateOf(prefs.getBoolean(AUTO_LOGIN, true)) }
-        var autoTo by remember { mutableStateOf(prefs.getString(AUTO_TO, "mac") ?: "mac") }
-        val places = listOf("mac" to "THE MAC") + Phones.all(prefs).map { it.address to it.name }
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Key((if (auto) "☑" else "☐") + " AUTO LOGIN", Modifier.weight(1f), active = auto, size = 15) {
-                auto = !auto; prefs.edit().putBoolean(AUTO_LOGIN, auto).apply()
-            }
-            Key("→ " + (places.firstOrNull { it.first == autoTo }?.second ?: "THE MAC"), Modifier.weight(1f), size = 15) {
-                val i = places.indexOfFirst { it.first == autoTo }
-                autoTo = places[(i + 1) % places.size].first; prefs.edit().putString(AUTO_TO, autoTo).apply()
-            }
-        }
-        T(if (auto) "On: at every start the app goes by itself to the place on the right (a tap changes it)."
-          else "Off: the app waits here; choose where to log in.", AmberDim, 12)
-        T("── THE MAC ───────────────────", Rule, 16)
-        Field("HOST (FOUND BY ITSELF; ONLY IF IT IS NOT)", host) { host = it.trim() }
-        Field("PORT", port, number = true) { port = it.filter(Char::isDigit) }
-        Field("VNC PASSWORD (SCREEN SHARING)", password, secret = true) { password = it }
-        Field("MAC USER (SHORT NAME)", user) { user = it.trim() }
-        Field("MAC LOGIN PASSWORD (AUTO-LOGIN, AND THE LOGIN BUTTON)", login, secret = true) { login = it }
-        Spacer(Modifier.height(12.dp))
-        Key(if (s.phase == Phase.CONNECTING) "DIALLING …" else "CONNECT", Modifier.fillMaxWidth(), size = 22) {
-            if (s.phase == Phase.CONNECTING) return@Key
-            prefs.edit().putString("host", host).putString("port", port).putString("password", password).putString("login", login).putString("user", user)
-                .putString(AUTO_TO, "mac").apply()
-            s.start()
-        }
-        Spacer(Modifier.height(12.dp))
-        T("> " + s.status, if (s.statusBad) RedAlert else GreenOk, 16)
-        // v16 (Marko, 26.10.2026: "On the first screen ... display all available connections. Each one needs a
-        // username and password for a computer, but for the phone it is a PIN"): every phone with its address and PIN
-        Phones.all(prefs).forEach { p ->
-            Spacer(Modifier.height(12.dp))
-            T("── ${p.name} ───────────────────", Rule, 16)
-            var addr by remember(p.address) { mutableStateOf(p.address) }
-            var pin by remember(p.address) { mutableStateOf(Secrets.pin(prefs, p.address)) }
-            Field("ADDRESS (TAILSCALE, ADB ON 5555)", addr) { addr = it.trim() }
-            Field("PIN (UNLOCKS IT ON CONNECTING; KEPT ENCRYPTED ON THIS PHONE)", pin, secret = true, number = true) { pin = it.filter(Char::isDigit) }
-            Key("CONNECT TO ${p.name}", Modifier.fillMaxWidth(), size = 18) {
-                val q = if (addr != p.address && addr.contains(':')) Phone(p.name, addr).also { Phones.remove(prefs, p); Phones.add(prefs, it) } else p
-                Secrets.putPin(prefs, q.address, pin)
-                prefs.edit().putString(AUTO_TO, q.address).apply()
-                s.phone = q
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        T("Nothing to type: the app switches Tailscale on, finds the Mac on the home Wi-Fi or through Tailscale, " +
-            "whichever answers first, and logs in. Closing the app switches Tailscale off.", AmberDim, 13)
+    }
+    T("── THE MAC ───────────────────", Rule, 16)
+    Field("PORT", port, number = true) { port = it.filter(Char::isDigit); saved = false }
+    Field("VNC PASSWORD (SCREEN SHARING)", password, secret = true) { password = it; saved = false }
+    Field("MAC USER (SHORT NAME)", user) { user = it.trim(); saved = false }
+    Field("MAC LOGIN PASSWORD (THE LOGIN BUTTON)", login, secret = true) { login = it; saved = false }
+    Key(if (saved) "SAVED" else "SAVE", Modifier.fillMaxWidth(), active = saved, size = 14) {
+        prefs.edit().putString("port", port).putString("password", password).putString("login", login).putString("user", user).apply()
+        Hold.session?.loginPassword = login
+        saved = true
+    }
+    Phones.all(prefs).forEach { p ->
+        T("── ${p.name} ───────────────────", Rule, 16)
+        var pin by remember(p.address) { mutableStateOf(Secrets.pin(prefs, p.address)) }
+        Field("PIN (UNLOCKS IT ON ENTERING; KEPT ENCRYPTED ON THIS PHONE)", pin, secret = true, number = true) { pin = it.filter(Char::isDigit) }
+        Key("SAVE PIN", Modifier.fillMaxWidth(), size = 14) { Secrets.putPin(prefs, p.address, pin) }
     }
 }
 
@@ -638,6 +631,8 @@ private val KEY_NAMES by lazy { mapOf(K_ESC to "ESC", K_TAB to "TAB", K_RETURN t
 @Composable
 private fun Live(s: Session) {
     val rfb = s.rfb ?: return
+    // v20: Back closes the machine and brings the list of machines (Marko, 2.11.2026); the Dock and full screen keep theirs
+    androidx.activity.compose.BackHandler(enabled = !s.full) { s.hangUp() }
     // the monitor, the zoom and where the picture stood come back after a restart (Marko, 26.10.2026)
     var monitor by remember { mutableIntStateOf(s.prefs?.getInt("monitor", 0) ?: 0) }
     // the frame rate is remembered between restarts; 1 FPS when nothing was chosen yet (Marko, 25.10.2026)
@@ -1192,7 +1187,7 @@ private fun Live(s: Session) {
                 // QUIT APP on the left, BACK (leaves ⚙) on the right (Marko, 26.10.2026)
                 Key("✕ QUIT APP", Modifier.weight(1f), size = 14) { settingsOpen = false; s.hangUp(); activity.finish() }
                 // v16: the link closed, the first screen back, to choose another place
-                Key("FIRST SCREEN", Modifier.weight(1f), size = 14) { settingsOpen = false; s.phone = null; s.hangUp() }
+                Key("✕ CLOSE MAC", Modifier.weight(1f), size = 14) { settingsOpen = false; s.phone = null; s.hangUp() }
                 Key("BACK", Modifier.weight(1f), size = 14) { settingsOpen = false }
             }
         }
