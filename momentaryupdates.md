@@ -172,3 +172,11 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 > "my action buttons are below action buttons from Android system. And then instead of pressing action button on my app, pressing action button on Android, and my application closes, or I open the keyboard ... No Mantra application ever drawing behind what already is there in the screen in Android ... Only if I go to full screen then those buttons ... need to be removed and I access them through swiping the finger from outside of the screen ... fix that now."
 
 - v18: the root is padded by the safe area in BOTH modes (MANTRA_MANIFEST system-bars.md §0). Seen on the Nothing Phone 2A in v17: in full screen the right rail (MON, KEYS, SCROLL, EXIT) lay under Android's triangle/circle/square, which the keyboard brings back. — **Status:** v18 installed on the Nothing; setup screen checked (below the clock, left of the buttons); live screen, bottom-button taps and full screen not yet checked (Marko took the phone back).
+
+## 2.11.2026, ~05:10 CT (relayed by the cloud session)
+
+> "the dock button actually opens the dock on my local computer. I want to see the dock but not actually dock from the macOS. I have my own dock switcher, and this dock switcher should be opened. If it's not running on my computer, it needs to start ... Now what's happened if it's not running? Nothing is happening. I need to run it manually."
+> "The local session should make door to this computer like API interface, and my application Mantra Remote VNC needs to do what is not possible to do through VNC, like for example running my Start menu items natively through simple commands and being able to control my Start menu applications ... it needs to build this kind of APIs for each of applications I already have ... And in every future app, there should be Python API available so remote control is possible for all of my apps."
+
+- DOCK opens Dock Switcher (started if not running) through the Mac door, never the macOS Dock. — **Status:** queued after the v18 phone test and Tailscale on teacher-vm.
+- Mantra Door (one API door on the Mac, Tailscale + token; MANTRA_MANIFEST remote-door.md) + mantra_remote.py; an APPS screen in the app; /health + /api in every star app. — **Status:** queued.
