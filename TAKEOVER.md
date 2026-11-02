@@ -79,3 +79,12 @@ Chrome and iTerm, works in VIEW ONLY). Gestures: 1 finger mouse (tap click, long
 3. The LANDSCAPE layout is unreachable since its button went (FULL is the sideways view); remove its code or bring it back.
 4. Background: tested 45 s only; test 10 minutes and a locked phone.
 5. The debug key signs the Mac builds; a CI workflow would sign with another key (android-app.md §1b).
+
+## 2.11.2026 (v18 → v20, main)
+- v18: ONLINE list at the top (Tailnet.kt: the Tailscale API with an OAuth client devices:read, else the known places,
+  each probed on its port), system bars kept clear (safeDrawingPadding), one MON toggle key in full screen.
+- v19: the address under the name (no cut in portrait); chromium-vm (100.102.86.30) known without OAuth.
+- v20: the first page is MY MACHINES, one button each (ENTER ▶, SOON for Linux), ✕ closes the app; AUTO LOGIN and
+  "→ THE MAC" removed; Back in the Mac view closes it and brings the list; Tailscale stays on until the app closes;
+  the passwords, PINs and the Tailscale pass under SETTINGS. Tested on the Nothing Phone 2a, 2.11.2026.
+- Next: entering a Linux machine (chromium-vm), and the Star API (STAR_API, port 8863, X-Mantra-Token) from the app.
