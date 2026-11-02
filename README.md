@@ -98,7 +98,7 @@ Do Stage 1 first. It is the fallback that always works when Stage 2 breaks.
 ### 1. Mac side
 
 ```bash
-git clone https://github.com/markoboskoauroville/MANTRA_REMOTE.git
+git clone https://github.com/markoboskoauroville/MANTRA_REMOTE_VNC_TAILSCALE.git
 cd MANTRA_REMOTE
 chmod +x mac/*.sh
 ./mac/mantra-mac-setup.sh
