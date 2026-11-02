@@ -189,3 +189,7 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 "now update my application. I don't need auto login. Remove the option completely. I don't know what this means. Next to auto login, there is some kind of arrow pointing to the right, and it says Mac. This confuses me. What I want to see on the first page is that Tailscale reads all my machines, and I have a button for each machine. Then I click on the button and get into the machine. When I close the machine, I get the list of machines again. In the list of machines, there will also be an X to close the app completely"
 (Before this, 09:17: the Tailscale OAuth client saved in v19 by Marko; the list now comes from the API: MACBOOK PRO and CHROMIUM-VM online; CONNECT, full screen, MON BENQ→MACBOOK→BENQ all pass.)
 **Status (2.11.2026, close):** v18 → main, v19 (address), v20 (machine list first page) built, tested on the Nothing, pushed. The OAuth client is saved in the app by Marko; the list comes from the Tailscale API.
+
+## 2.11.2026, Marko (to the chromium-vm session)
+"Also, your task is to update the Android application Mantra Remote VNC to be compatible with Chromium virtual machine"
+"then you can test this application through Connected. I have a real phone which we call the Pixel 7, and you can drive it and test the application connection and disconnection automatically"
