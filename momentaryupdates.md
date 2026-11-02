@@ -180,3 +180,7 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 
 - DOCK opens Dock Switcher (started if not running) through the Mac door, never the macOS Dock. — **Status:** queued after the v18 phone test and Tailscale on teacher-vm.
 - Mantra Door (one API door on the Mac, Tailscale + token; MANTRA_MANIFEST remote-door.md) + mantra_remote.py; an APPS screen in the app; /health + /api in every star app. — **Status:** queued.
+
+## 2.11.2026 09:15 CT, Marko (mac-session1): v18 to main, v19, every device listed
+"I'm saying yes. That Mantra Remote v18 becomes the main version, and fix the cut of MAC address in v19. Yes. Option 2: optional Tailscale or out client device thread pasted in Mantra Remote. I want every device listed, including Chromium virtual machine 2"
+(v18 tested on the Nothing 2.11.2026 08:46: ONLINE list, CONNECT, bottom keys above the system bar, MON BENQ→MACBOOK→BENQ. Flaw: in portrait the address beside CONNECT is cut.)
