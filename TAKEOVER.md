@@ -104,3 +104,7 @@ Chrome and iTerm, works in VIEW ONLY). Gestures: 1 finger mouse (tap click, long
   (1512x944), a tap on empty space moved the VM's pointer exactly there, FIT → 410x598 and back to 1512x944, Back → LINK
   CLOSED (socket TIME_WAIT, service stopped), ENTER again → picture. Keys and typing not tried (his Gemini job ran there).
 - Next: the same test on the real Pixel 7 (USB debugging on) and the Nothing; a key test on an empty Chrome tab.
+
+## v22 (2.11.2026)
+
+Tap the title on the first page (the list of machines) → GitHub releases/latest of MANTRA_REMOTE_VNC_TAILSCALE; not inside a machine. Tested on the real Pixel 7 over ADB: the tap opens Firefox; ENTER CHROMIUM-VM live (1 FPS, 125 ms), the top inside a session opens nothing, Back → LINK CLOSED and the list. The repo is private, so the page shows 404 unless the phone is signed in to GitHub. Main is the only branch; v22 is the Latest release.
