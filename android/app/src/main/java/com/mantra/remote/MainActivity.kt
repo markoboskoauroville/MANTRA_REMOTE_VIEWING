@@ -124,6 +124,7 @@ private fun helpText(label: String): String {
         l == "🖱" || l == "MOUSE" -> "MOUSE: while it is lit, one finger moves the Mac's pointer to where it touches, without clicking. Three fingers tapped together click, two fingers tapped together right-click, where the pointer stands. Spreading, pinching and three-finger panning still work."
         l == "L" -> "The Mac's left mouse button, pressed once where the pointer stands (shown while 🖱 MOUSE is lit)."
         l == "R" -> "The Mac's right mouse button, pressed once where the pointer stands (shown while 🖱 MOUSE is lit)."
+        l == "D" -> "DRAG: the first press holds the Mac's left button down where the pointer stands; moving the pointer then drags; the second press lets the button go (lit green while held)."
         l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l.removePrefix("C").trim() in setOf("FULL", "65K", "4096", "512", "64", "8", "B/W") || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
@@ -267,6 +268,11 @@ private class Session : Rfb.Listener {
     @Volatile var pressedBase = -1L
     /** The sister answers: the landing line is hers; otherwise the 1x1 picture (Rfb.probe) stands in. */
     @Volatile var sisterOk = false
+    /**
+     * A mouse press is not a key: the sister's key count never moves for it, so a click read "NOT LANDED YET" while it
+     * had landed (Marko, 30.10.2026). A press marked so is confirmed by the picture probe even while the sister answers.
+     */
+    @Volatile var byPicture = false
     private var watching = 0
     /** The phone's dock (DOCK): open, and its apps with their icons, kept between openings. */
     var dockOpen by mutableStateOf(false)
@@ -297,7 +303,7 @@ private class Session : Rfb.Listener {
     fun landed() {
         if (pressed.isEmpty()) return
         android.util.Log.i("MantraRemote", "landed: $pressed in ${System.currentTimeMillis() - pressedAt} ms (${if (sisterOk) "the Mac saw it" else "picture probe"})")
-        pressed = ""
+        pressed = ""; byPicture = false
     }
     /** A link is wanted (CONNECT was pressed, ✕ not): a link that falls is dialled again on return. */
     var wanted = false
@@ -366,7 +372,7 @@ private class Session : Rfb.Listener {
     }
     override fun onFrame() { tick++ }
     // the picture probe speaks only while the sister on the Mac does not answer
-    override fun onLanded() { if (!sisterOk) main.post { landed() } }
+    override fun onLanded() { if (!sisterOk || byPicture) main.post { landed() } }
     override fun onClosed(reason: String) {
         phase = Phase.SETUP; status = reason.uppercase(); statusBad = true
         // in front, a fall is dialled again by itself (Tailscale coming up changes the network under the link);
@@ -383,11 +389,16 @@ private class Session : Rfb.Listener {
 
 @Composable
 private fun App(prefs: android.content.SharedPreferences, session: Session) {
+    // v18, MANTRA_MANIFEST system-bars.md §0 (Marko, 2.11.2026: "No Mantra application ever drawing behind what already
+    // is there in the screen in Android"): the safe area pads the root in BOTH modes. In NORMAL the status bar, the camera
+    // hole and the navigation bar are outside the app; in FULL SCREEN the bars are hidden (their insets are 0, so the
+    // picture still fills the glass), the camera hole stays clear, and when Android does show its buttons (the keyboard
+    // brings them back on the right in landscape) the rail moves out from under them instead of sitting below them.
     Box(
         Modifier
             .fillMaxSize()
+            .safeDrawingPadding()
             .background(Bg)
-            .then(if (session.full) Modifier else Modifier.safeDrawingPadding())
     ) {
         when (session.phase) {
             Phase.SETUP, Phase.CONNECTING -> Setup(prefs, session)
@@ -605,6 +616,7 @@ private fun Live(s: Session) {
     var mouseMode by remember { mutableStateOf(s.prefs?.getBoolean("mouse_mode", false) ?: false) }
     LaunchedEffect(mouseMode) { s.prefs?.edit()?.putBoolean("mouse_mode", mouseMode)?.apply() }
     var mouseAt by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var dragHeld by remember { mutableStateOf(false) }
     // VIEW ONLY is remembered like FPS: watching stays watching after a restart
     var viewOnly by remember { mutableStateOf(s.prefs?.getBoolean("view_only", false) ?: false) }
     LaunchedEffect(rfb, viewOnly) { rfb.viewOnly = viewOnly; s.prefs?.edit()?.putBoolean("view_only", viewOnly)?.apply() }
@@ -674,7 +686,9 @@ private fun Live(s: Session) {
         if (m.isNotEmpty()) mods.value = emptySet()
     }
     // what is on its way, shown above the keys until the Mac has it (Marko, 26.10.2026)
-    fun travelling(label: String) { s.pressed = label; s.pressedAt = System.currentTimeMillis(); s.pressedBase = s.keysSeen }
+    fun travelling(label: String, picture: Boolean = false) {
+        s.byPicture = picture; s.pressed = label; s.pressedAt = System.currentTimeMillis(); s.pressedBase = if (picture) -1 else s.keysSeen
+    }
     // v17: the left and right buttons beside 🖱, pressed where the pointer stands (Marko, 27.10.2026: "I tap to the
     // point, and then I have action buttons for the left and right mouse button"); no pointer yet: the picture's middle
     fun mouseClick(button: Int) {
@@ -682,7 +696,8 @@ private fun Live(s: Session) {
         // VIEW ONLY lets no click through: say so, instead of a click that seems sent (Marko, 27.10.2026: "the mouse
         // clicks are not landing")
         if (viewOnly) { travelling("VIEW ONLY: NO CLICK"); return }
-        travelling(if (button == 1) "CLICK" else "RIGHT CLICK")
+        if (dragHeld) { dragHeld = false; Thread { rfb.pointer(x, y, 0) }.start() }   // a click ends a drag first
+        travelling(if (button == 1) "CLICK" else "RIGHT CLICK", picture = true)
         // the pointer goes there first, the button is held 50 ms, as a hand does; a press and a release in the same
         // instant can be lost on the Mac
         Thread {
@@ -692,7 +707,21 @@ private fun Live(s: Session) {
         }.start()
     }
     // 🖱 and VIEW ONLY exclude each other: the mouse mode is for clicking, VIEW ONLY for never clicking
-    fun setMouse(on: Boolean) { mouseMode = on; if (on) { scrollMode = false; viewOnly = false } }
+    // v18: DRAG, the third button of the mouse (Marko, 30.10.2026: "Drag means pressing the key and keeping it down until
+    // I press drag again"): the first press holds the left button where the pointer stands, every move of the pointer
+    // then drags, the second press lets it go
+    fun toggleDrag() {
+        val (x, y) = mouseAt ?: (rect[0] + rect[2] / 2 to rect[1] + rect[3] / 2)
+        if (!dragHeld && viewOnly) { travelling("VIEW ONLY: NO DRAG"); return }
+        dragHeld = !dragHeld
+        val down = dragHeld
+        travelling(if (down) "DRAG: BUTTON DOWN" else "DRAG: BUTTON UP", picture = true)
+        Thread {
+            if (down) { rfb.pointer(x, y, 0); Thread.sleep(30); rfb.pointer(x, y, 1) } else rfb.pointer(x, y, 0)
+            rfb.probe()
+        }.start()
+    }
+    fun setMouse(on: Boolean) { mouseMode = on; if (on) { scrollMode = false; viewOnly = false } else if (dragHeld) toggleDrag() }
     LaunchedEffect(Unit) { if (mouseMode && viewOnly) viewOnly = false }
     fun tapKey(k: Int) {
         travelling((mods.value.mapNotNull { m -> MOD_KEYS.firstOrNull { it.second == m }?.first } + KEY_NAMES.getOrElse(k) { "KEY" }).joinToString(" "))
@@ -902,7 +931,7 @@ private fun Live(s: Session) {
                     val quick = System.currentTimeMillis() - t0 < 400
                     if (mouse) {
                         // MOUSE: a short tap of three fingers clicks, of two fingers right-clicks, where the pointer is
-                        if (!multi) { val to = toFb(last); mouseAt = to; rfb.pointer(to.first, to.second, 0); return@awaitEachGesture }
+                        if (!multi) { val to = toFb(last); mouseAt = to; rfb.pointer(to.first, to.second, if (dragHeld) 1 else 0); return@awaitEachGesture }
                         val at = mouseAt
                         if (at != null && System.currentTimeMillis() - t0 < 400 && multiTravel < 60f) {
                             val button = if (fingers >= 3) 1 else 4
@@ -1036,6 +1065,7 @@ private fun Live(s: Session) {
         if (mouseMode) {
             Key("L", Modifier.weight(0.6f), size = 18, sub = "CLICK", padH = 2) { mouseClick(1) }
             Key("R", Modifier.weight(0.6f), size = 18, sub = "CLICK", padH = 2) { mouseClick(4) }
+            Key("D", Modifier.weight(0.6f), active = dragHeld, size = 18, sub = "DRAG", padH = 2) { toggleDrag() }
         }
     }
     // v17: ⚙ at the right end of the last row that is shown (Marko, 27.10.2026: "the settings gear icon should move to
@@ -1170,6 +1200,7 @@ private fun Live(s: Session) {
                 if (mouseMode) {
                     RailKey("L", "CLICK", RailState.OFF) { mouseClick(1) }
                     RailKey("R", "CLICK", RailState.OFF) { mouseClick(4) }
+                    RailKey("D", "DRAG", if (dragHeld) RailState.ON else RailState.OFF) { toggleDrag() }
                 }
                 RailKey("NEXT", "TAB", RailState.OFF) { nextTab() }
                 RailKey("DOCK", null, RailState.OFF, onLongClick = { dock() }) { dockHiding() }

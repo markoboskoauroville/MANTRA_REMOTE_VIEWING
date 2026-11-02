@@ -166,3 +166,9 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 > "before doing that, we need to update my app on my phone, which is called mantra remote vnc The mouse now has a left and a right button, but it also needs to drag. Drag means pressing the key and keeping it down until I press drag again. So please give me drag as a third control of the mouse. Also, when I press the left mouse button, the application says my click is not landing. Please open this application via wireless debugging on my phone and test it." (Marko, 30.10.2026)
 
 - DRAG beside L and R in 🖱 MOUSE: a toggle; the first press holds the Mac's left button down where the pointer stands, moving the pointer drags, the second press lets it go. And L CLICK says "not landing": test it on the Nothing over wireless debugging. — **Status:** asked.
+
+## 2.11.2026, 04:40 CT (relayed by the cloud session)
+
+> "my action buttons are below action buttons from Android system. And then instead of pressing action button on my app, pressing action button on Android, and my application closes, or I open the keyboard ... No Mantra application ever drawing behind what already is there in the screen in Android ... Only if I go to full screen then those buttons ... need to be removed and I access them through swiping the finger from outside of the screen ... fix that now."
+
+- v18: the root is padded by the safe area in BOTH modes (MANTRA_MANIFEST system-bars.md §0). Seen on the Nothing Phone 2A in v17: in full screen the right rail (MON, KEYS, SCROLL, EXIT) lay under Android's triangle/circle/square, which the keyboard brings back. — **Status:** v18 installed on the Nothing; setup screen checked (below the clock, left of the buttons); live screen, bottom-button taps and full screen not yet checked (Marko took the phone back).
