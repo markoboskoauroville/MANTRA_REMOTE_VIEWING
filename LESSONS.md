@@ -50,3 +50,5 @@
   under the tap and it went into another field. Check `focused="true"` in a uiautomator dump before typing.
 - **(2.11.2026) A Pixel on USB with no ADB interface** (USB tree shows it, `adb devices` empty) is not reachable; it
   needs USB debugging (or a USB mode with ADB) chosen on the phone.
+- **(1.11.2026) Releasing a Twilio number throws away the paid rest of its month** (no refund, no way back). Keep a
+  number until just before its next charge, and ask Marko before releasing. See `docs/TWILIO.md`.
