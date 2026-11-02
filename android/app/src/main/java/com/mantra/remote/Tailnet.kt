@@ -75,7 +75,8 @@ object Tailnet {
     fun places(prefs: SharedPreferences?): List<Place> {
         val me = own()
         val api = fromApi(prefs)
-        val known = api ?: (listOf(Triple("macbook-pro", MacFinder.MAC_TAILSCALE_IP, "macOS")) +
+        // v19: the Oracle machine (chromium-vm, Marko 2.11.2026) is known even before the OAuth client is pasted
+        val known = api ?: (listOf(Triple("macbook-pro", MacFinder.MAC_TAILSCALE_IP, "macOS"), Triple("chromium-vm", "100.102.86.30", "linux")) +
             Phones.all(prefs).map { Triple(it.name, it.address.substringBefore(':'), "android") })
         val pool = Executors.newFixedThreadPool(8)
         val list = known.filter { it.second !in me }.distinctBy { it.second }.map { (name, ip, os) ->

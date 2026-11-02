@@ -511,8 +511,12 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
         else if (list.isEmpty()) T("> nothing answers", RedAlert, 14)
         else list.forEach { pl ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                T((if (pl.online) "● " else "○ ") + pl.name, if (pl.online) GreenOk else AmberDim, 16, bold = pl.online, modifier = Modifier.weight(1f), oneLine = true)
-                T(pl.os.lowercase() + "  " + pl.ip, AmberDim, 12, modifier = Modifier.weight(1f), oneLine = true)
+                // v19 (Marko, 2.11.2026: "fix the cut of MAC address"): the name over the address, so a portrait phone
+                // shows the whole 100.x address instead of cutting it beside the key
+                Column(Modifier.weight(1.6f)) {
+                    T((if (pl.online) "● " else "○ ") + pl.name, if (pl.online) GreenOk else AmberDim, 16, bold = pl.online, oneLine = true)
+                    T(pl.os.lowercase() + "  " + pl.ip, AmberDim, 12)
+                }
                 when {
                     !pl.online -> Key("OFFLINE", Modifier.weight(0.8f), size = 14) { looking++ }
                     pl.kind == Tailnet.Kind.MAC -> Key("CONNECT", Modifier.weight(0.8f), active = true, size = 14) {
