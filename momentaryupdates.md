@@ -193,3 +193,5 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 ## 2.11.2026, Marko (to the chromium-vm session)
 "Also, your task is to update the Android application Mantra Remote VNC to be compatible with Chromium virtual machine"
 "then you can test this application through Connected. I have a real phone which we call the Pixel 7, and you can drive it and test the application connection and disconnection automatically"
+
+"a real Pixel 7 is ready. Please, can you check if it's working" (Marko, 2.11.2026)
