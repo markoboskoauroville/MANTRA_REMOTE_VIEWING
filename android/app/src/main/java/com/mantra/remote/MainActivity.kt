@@ -497,6 +497,51 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
     ) {
         T("MANTRA REMOTE VNC ▊", Amber, 30, bold = true)   // v17: the new name (Marko, 27.10.2026)
         T("v" + BuildConfig.VERSION_NAME, AmberDim, 13)          // the version the person sees (versioning.md §3)
+        // v18: every place at the top, one button each (Marko, 2.11.2026: "Everything is listed at the top"); Tailnet.kt
+        var online by remember { mutableStateOf<List<Tailnet.Place>?>(null) }
+        var looking by remember { mutableStateOf(0) }
+        LaunchedEffect(looking) {
+            online = null
+            online = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Tailscale.onAndWait(s.app ?: return@withContext emptyList()); Tailnet.places(prefs) }
+        }
+        Spacer(Modifier.height(8.dp))
+        T("── ONLINE ─────────────────────", Rule, 16)
+        val list = online
+        if (list == null) T("> looking in Tailscale …", AmberDim, 14)
+        else if (list.isEmpty()) T("> nothing answers", RedAlert, 14)
+        else list.forEach { pl ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                T((if (pl.online) "● " else "○ ") + pl.name, if (pl.online) GreenOk else AmberDim, 16, bold = pl.online, modifier = Modifier.weight(1f), oneLine = true)
+                T(pl.os.lowercase() + "  " + pl.ip, AmberDim, 12, modifier = Modifier.weight(1f), oneLine = true)
+                when {
+                    !pl.online -> Key("OFFLINE", Modifier.weight(0.8f), size = 14) { looking++ }
+                    pl.kind == Tailnet.Kind.MAC -> Key("CONNECT", Modifier.weight(0.8f), active = true, size = 14) {
+                        if (s.phase == Phase.CONNECTING) return@Key
+                        prefs.edit().putString("host", pl.ip).putString(AUTO_TO, "mac").apply()
+                        s.start()
+                    }
+                    pl.kind == Tailnet.Kind.PHONE -> Key("CONNECT", Modifier.weight(0.8f), active = true, size = 14) {
+                        val known = Phones.all(prefs).firstOrNull { it.address.substringBefore(':') == pl.ip }
+                        val q = known ?: Phone(pl.name, pl.ip + ":5555").also { Phones.add(prefs, it) }
+                        prefs.edit().putString(AUTO_TO, q.address).apply()
+                        s.phone = q
+                    }
+                    else -> Key("SSH SOON", Modifier.weight(0.8f), size = 14) { looking++ }
+                }
+            }
+        }
+        Key("↻ LOOK AGAIN", Modifier.fillMaxWidth(), size = 14) { looking++ }
+        if (!Tailnet.keyed(prefs)) {
+            T("Only the places this app knows. For every device of your tailnet (the Oracle machine too): Tailscale admin " +
+              "console → Settings → OAuth clients → Generate, scope Devices: Read; paste both here.", AmberDim, 12)
+            var tid by remember { mutableStateOf("") }
+            var tsec by remember { mutableStateOf("") }
+            Field("TAILSCALE OAUTH CLIENT ID", tid) { tid = it.trim() }
+            Field("TAILSCALE OAUTH CLIENT SECRET", tsec, secret = true) { tsec = it.trim() }
+            if (tid.isNotEmpty() && tsec.isNotEmpty()) Key("SAVE (ENCRYPTED ON THIS PHONE)", Modifier.fillMaxWidth(), size = 14) {
+                Secrets.putPin(prefs, Tailnet.ID, tid); Secrets.putPin(prefs, Tailnet.SECRET, tsec); looking++
+            }
+        }
         // v16: AUTO LOGIN, and where it goes; a CONNECT below makes its place the one it goes to
         var auto by remember { mutableStateOf(prefs.getBoolean(AUTO_LOGIN, true)) }
         var autoTo by remember { mutableStateOf(prefs.getString(AUTO_TO, "mac") ?: "mac") }
