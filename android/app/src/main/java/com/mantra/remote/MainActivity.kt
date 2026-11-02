@@ -532,9 +532,14 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+            // v22 (Marko, 2.11.2026: "when the user clicks at the top of the application, it comes to the GitHub page to
+            // download the latest version" ... "only from the login screen, not inside the remote session"): only here.
+            Column(Modifier.weight(1f).clickable {
+                activity?.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://github.com/markoboskoauroville/MANTRA_REMOTE_VNC_TAILSCALE/releases/latest")))
+            }) {
                 T("MANTRA REMOTE VNC ▊", Amber, 26, bold = true)
-                T("v" + BuildConfig.VERSION_NAME, AmberDim, 13)
+                T("v" + BuildConfig.VERSION_NAME + "  ·  tap for the latest version", AmberDim, 13)
             }
             Key("✕", Modifier.width(60.dp), size = 22) { activity?.finish() }   // closes the app: link, service, Tailscale off
         }
