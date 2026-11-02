@@ -110,3 +110,7 @@ Chrome and iTerm, works in VIEW ONLY). Gestures: 1 finger mouse (tap click, long
 Tap the title on the first page (the list of machines) → GitHub releases/latest of MANTRA_REMOTE_VNC_TAILSCALE; not inside a machine. Tested on the real Pixel 7 over ADB: the tap opens Firefox; ENTER CHROMIUM-VM live (1 FPS, 125 ms), the top inside a session opens nothing, Back → LINK CLOSED and the list. The repo is private, so the page shows 404 unless the phone is signed in to GitHub. Main is the only branch; v22 is the Latest release.
 
 "make repository public" (Marko, 2.11.2026): done; the history was searched for keys first (none). The title tap on the Pixel 7 now opens v22 with its APK in the GitHub app.
+- 2.11.2026 ~16:40 CT (chromium-vm Mac session): v21 installed on the real Pixel 7 (41241FDH2S10SJ, by adb), the
+  notification permission allowed, the CHROMIUM-VM VNC password saved under SETTINGS (typed from the key file into
+  the verified field, never shown). The ENTER / picture / Back test on the real phone was not done: Marko said
+  "wait until I say continue". Tailscale on the phone was last seen 6 days before: check it is on before ENTER.
