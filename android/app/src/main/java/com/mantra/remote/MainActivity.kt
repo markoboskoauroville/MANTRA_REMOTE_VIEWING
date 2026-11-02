@@ -1237,9 +1237,9 @@ private fun Live(s: Session) {
                 if (keyboard) Box(Modifier.align(Alignment.BottomCenter)) { typing() }
             }
             Column(Modifier.width(76.dp).fillMaxHeight()) {
-                MONITORS.forEachIndexed { i, m ->
-                    RailKey("MON ${i + 1}", m.name.substringAfter(' '), if (monitor == i) RailState.ON else RailState.OFF) { monitor = i }
-                }
+                // v18: one key toggles the monitors, its label the one on screen (Marko, 2.11.2026: "I need only one
+                // button which toggles the monitors"); with more than two it steps to the next
+                RailKey("MON ${monitor + 1}", MONITORS[monitor].name.substringAfter(' '), RailState.ON) { monitor = (monitor + 1) % MONITORS.size }
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
                 RailKey("MOUSE", null, if (mouseMode) RailState.ON else RailState.OFF) { setMouse(!mouseMode) }
                 if (mouseMode) {
