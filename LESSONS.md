@@ -43,3 +43,10 @@
   landed (Marko saw "NOT LANDED YET" with the key done). The Mac's own count of key events (Dock Switcher /keys) is.
 - **Android blocks plain http by default** (targetSdk 35); runCatching hid the error. Log every failure of a network call.
 
+- **(2.11.2026) TigerVNC sends ExtendedDesktopSize only to a client that lists -308**, and then never the plain -223;
+  the reply to SetDesktopSize is a -308 rectangle with status in y (0 = done). The VM is shared with the Mac viewer, so a
+  phone that resizes it must give the old size back on leaving.
+- **(2.11.2026) Typing a secret with `adb shell input text` lands in whichever field has focus**: the list scrolled
+  under the tap and it went into another field. Check `focused="true"` in a uiautomator dump before typing.
+- **(2.11.2026) A Pixel on USB with no ADB interface** (USB tree shows it, `adb devices` empty) is not reachable; it
+  needs USB debugging (or a USB mode with ADB) chosen on the phone.

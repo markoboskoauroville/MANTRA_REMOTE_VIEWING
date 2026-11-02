@@ -28,6 +28,13 @@ object Tailnet {
     enum class Kind { MAC, PHONE, LINUX, OTHER }
     data class Place(val name: String, val ip: String, val os: String, val kind: Kind, val online: Boolean)
 
+    /** v21: a Linux machine with a VNC server this app can enter (TigerVNC, VNC password, Tailscale only). */
+    data class LinuxVm(val name: String, val ip: String, val port: Int)
+    val LINUX_VMS = listOf(LinuxVm("CHROMIUM-VM", "100.102.86.30", 5901))
+    fun linuxVm(ip: String) = LINUX_VMS.firstOrNull { it.ip == ip }
+    /** Where its VNC password is kept, encrypted (Secrets), never in the clear. */
+    fun vncKey(vm: LinuxVm) = "vnc:" + vm.ip
+
     const val ID = "tailscale-oauth-id"
     const val SECRET = "tailscale-oauth-secret"
 
@@ -80,7 +87,12 @@ object Tailnet {
             Phones.all(prefs).map { Triple(it.name, it.address.substringBefore(':'), "android") })
         val pool = Executors.newFixedThreadPool(8)
         val list = known.filter { it.second !in me }.distinctBy { it.second }.map { (name, ip, os) ->
-            pool.submit<Place> { val k = kindOf(os); Place(name.uppercase(), ip, os, k, answers(ip, port(k))) }
+            pool.submit<Place> {
+                val k = kindOf(os)
+                // v21: a Linux machine with VNC answers on its VNC port (chromium-vm: 5901), else on ssh
+                val up = linuxVm(ip)?.let { answers(ip, it.port) } ?: answers(ip, port(k))
+                Place(name.uppercase(), ip, os, k, up)
+            }
         }.mapNotNull { runCatching { it.get(5, TimeUnit.SECONDS) }.getOrNull() }
         pool.shutdownNow()
         return list.sortedWith(compareBy({ !it.online }, { it.kind.ordinal }, { it.name }))

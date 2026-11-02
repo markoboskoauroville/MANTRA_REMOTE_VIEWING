@@ -69,6 +69,8 @@ class Colours(
 class Rfb(
     private val listener: Listener,
     private val colours: Colours = Colours.ALL[0],
+    /** v21: a Linux machine (TigerVNC): ask for ExtendedDesktopSize, so the phone may set the machine's size. */
+    private val extendedSize: Boolean = false,
 ) {
     interface Listener {
         fun onConnected(name: String, width: Int, height: Int)
@@ -117,6 +119,25 @@ class Rfb(
                 runCatching { socket?.close() }
             }
         }, "rfb").start()
+    }
+
+    /** v21: the server said it takes SetDesktopSize (ExtendedDesktopSize came), and its first screen's id. */
+    @Volatile var canResize = false; private set
+    @Volatile private var screenId = 0
+
+    /** v21: asks the machine to take this size (TigerVNC, message 251); one screen at 0,0. */
+    fun setDesktopSize(w: Int, h: Int) {
+        if (!canResize || w < 200 || h < 150) return
+        send {
+            it.writeByte(251); it.writeByte(0); it.writeShort(w); it.writeShort(h); it.writeByte(1); it.writeByte(0)
+            it.writeInt(screenId); it.writeShort(0); it.writeShort(0); it.writeShort(w); it.writeShort(h); it.writeInt(0)
+        }
+    }
+
+    /** v21: closes the link after everything already sent has left (a size given back goes out first). */
+    fun closeAfterWrites() {
+        if (!running) return
+        writer.execute { close() }
     }
 
     fun close() {
@@ -247,7 +268,8 @@ class Rfb(
         output.writeShort(c.rMax); output.writeShort(c.gMax); output.writeShort(c.bMax)
         output.writeByte(c.rShift); output.writeByte(c.gShift); output.writeByte(c.bShift); output.write(ByteArray(3))
         // SetEncodings: ZRLE, Zlib, Hextile, CopyRect, Raw, DesktopSize
-        val enc = intArrayOf(16, 6, 5, 1, 0, -223)
+        // v21: + ExtendedDesktopSize (-308) for a Linux machine only; Apple's server is left as it was
+        val enc = if (extendedSize) intArrayOf(16, 6, 5, 1, 0, -308, -223) else intArrayOf(16, 6, 5, 1, 0, -223)
         output.writeByte(2); output.writeByte(0); output.writeShort(enc.size)
         enc.forEach { output.writeInt(it) }
         output.flush()
@@ -323,6 +345,14 @@ class Rfb(
                 6 -> zlib(x, y, w, h)
                 16 -> zrle(x, y, w, h)
                 -223 -> { resize(w, h); listener.onConnected("", w, h); continue }
+                -308 -> {                                  // ExtendedDesktopSize: x = reason, y = status (0 = done)
+                    val n = input.readUnsignedByte(); input.skipBytes(3)
+                    for (k in 0 until n) { val sc = readFully(16); if (k == 0) screenId = java.nio.ByteBuffer.wrap(sc).int }
+                    canResize = true
+                    android.util.Log.i("MantraRemote", "desktop size ${w}x$h reason $x status $y")
+                    if (y == 0 && (w != width || h != height)) { resize(w, h); listener.onConnected("", w, h) }
+                    continue
+                }
                 else -> throw IllegalStateException("UNKNOWN ENCODING $e")
             }
             minX = minOf(minX, x); minY = minOf(minY, y); maxX = maxOf(maxX, x + w); maxY = maxOf(maxY, y + h)

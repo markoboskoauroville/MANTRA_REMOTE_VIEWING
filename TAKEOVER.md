@@ -88,3 +88,19 @@ Chrome and iTerm, works in VIEW ONLY). Gestures: 1 finger mouse (tap click, long
   "→ THE MAC" removed; Back in the Mac view closes it and brings the list; Tailscale stays on until the app closes;
   the passwords, PINs and the Tailscale pass under SETTINGS. Tested on the Nothing Phone 2a, 2.11.2026.
 - Next: entering a Linux machine (chromium-vm), and the Star API (STAR_API, port 8863, X-Mantra-Token) from the app.
+
+## 2.11.2026 (v21, main): entering chromium-vm
+- `Tailnet.LINUX_VMS` (CHROMIUM-VM 100.102.86.30:5901); the list probes a Linux VM on its VNC port, ENTER ▶ instead of SOON.
+- `Session.linux` set → `startLinux()`: Tailscale on, dial straight, VncAuth (type 2) with the password from
+  `Secrets.pin(prefs, "vnc:100.102.86.30")` (SETTINGS → CHROMIUM-VM (LINUX), encrypted by the Keystore). No password
+  saved → the status asks for it and SETTINGS opens. No MacSister key watch for a Linux machine (landing = picture probe).
+- `Rfb(…, extendedSize = true)` asks ExtendedDesktopSize (-308) for Linux only (Apple's encodings untouched); parses it,
+  `setDesktopSize()` (msg 251), `closeAfterWrites()`. FIT / FITTED (row 3 and the full-screen rail): the VM takes the
+  picture's size in dp (410x598 on the Pixel 7 portrait); the second tap, Back or ✕ gives the size it had back.
+- Hidden on Linux: ⌘ (mods are ctrl / alt / shift), ⇄, DOCK, LOGIN, ☰, rail LOGIN / MON / DOCK; the monitor swipe; Mac
+  zoom/pan prefs are not touched. ⇥ = Ctrl+Tab (not tried: Marko's Chrome tabs were left alone).
+- Tested 2.11.2026 on the Pixel_7_API_35 emulator (headless, portrait), NOT the real Pixel 7: it was on USB but offered
+  no ADB interface (adb saw no device; Tailscale pixel-7 offline 6 days). Seen: ENTER → Chrome/Gemini picture in 1 s
+  (1512x944), a tap on empty space moved the VM's pointer exactly there, FIT → 410x598 and back to 1512x944, Back → LINK
+  CLOSED (socket TIME_WAIT, service stopped), ENTER again → picture. Keys and typing not tried (his Gemini job ran there).
+- Next: the same test on the real Pixel 7 (USB debugging on) and the Nothing; a key test on an empty Chrome tab.

@@ -1,5 +1,10 @@
 # MANTRA REMOTE
 
+**v21 (2.11.2026): CHROMIUM-VM is entered too.** Its button says ENTER ▶ and opens the Oracle VM (100.102.86.30:5901,
+TigerVNC, VNC password kept encrypted on the phone under SETTINGS → CHROMIUM-VM). Same picture, gestures and keys; the
+Mac-only keys (⌘, MON / ⇄, DOCK, LOGIN, ☰) hide there; ⇥ is Ctrl+Tab; FIT asks the VM for the phone's size (a second tap
+or leaving gives the old size back). Back / ✕ closes the link.
+
 **The Android app, v13 (26.10.2026):** `android/`, the phone controls the Mac with Apple Screen Sharing, logged in as
 Marko, two monitors, gestures, a held link in the background. Nothing to type: opening the app switches the phone's
 Tailscale on, finds the Mac (home Wi-Fi by Bonjour, or Tailscale, the first that answers) and logs in; closing it

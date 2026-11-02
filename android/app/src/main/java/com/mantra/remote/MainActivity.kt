@@ -149,6 +149,7 @@ private fun helpText(label: String): String {
         l == "⏎" -> "Return: confirms, sends, a new line."
         l == "⌫" -> "Delete: removes the letter before the cursor."
         l == "←" || l == "→" || l == "↑" || l == "↓" -> "The arrow key, as on the Mac's keyboard."
+        l == "FIT" || l == "FITTED" -> "Linux machine only: FIT asks the machine to take the size of the phone's picture, so Chrome fills the phone upright. Lit, it is fitted; a tap gives the machine its old size back (leaving the machine does that too)."
         l == "CONNECT" -> "Switches Tailscale on, finds the Mac by itself (home Wi-Fi or Tailscale, the first that answers) and logs in with the user and password above. The app does this by itself when it opens."
         else -> label
     }
@@ -301,6 +302,10 @@ private class Session : Rfb.Listener {
     }
     /** A link is wanted (CONNECT was pressed, ✕ not): a link that falls is dialled again on return. */
     var wanted = false
+    /** v21: the Linux machine entered (chromium-vm), or null for the Mac. Mac-only keys hide while it is set. */
+    var linux by mutableStateOf<Tailnet.LinuxVm?>(null)
+    /** v21: the machine's size before FIT, given back on a second FIT or on leaving; null: not fitted. */
+    var fitFrom by mutableStateOf<Pair<Int, Int>?>(null)
 
     /** Each start counts; a search still running for an older start gives up. */
     @Volatile private var attempt = 0
@@ -315,6 +320,7 @@ private class Session : Rfb.Listener {
     fun start() {
         val c = app ?: return
         val p = prefs ?: return
+        linux?.let { startLinux(c, p, it); return }
         loginPassword = p.getString("login", "") ?: ""
         wanted = true; phase = Phase.CONNECTING; status = "> TAILSCALE ON"; statusBad = false
         rfb?.close(); rfb = null; baseRx = 0; baseTx = 0
@@ -348,9 +354,39 @@ private class Session : Rfb.Listener {
         }, "find-mac").start()
     }
 
+    /**
+     * v21 (Marko, 2.11.2026: "update the Android application Mantra Remote VNC to be compatible with Chromium virtual
+     * machine"): a Linux machine is dialled straight at its Tailscale address and VNC port, with its VNC password
+     * (kept encrypted, SETTINGS); no Mac finder, no Dock Switcher.
+     */
+    private fun startLinux(c: Context, p: android.content.SharedPreferences, vm: Tailnet.LinuxVm) {
+        val password = Secrets.pin(p, Tailnet.vncKey(vm))
+        wanted = true; phase = Phase.CONNECTING; status = "> TAILSCALE ON"; statusBad = false
+        rfb?.close(); rfb = null; baseRx = 0; baseTx = 0; sisterOk = false; sisterHost = ""
+        LinkService.start(c)
+        val gen = ++attempt
+        Thread({
+            Tailscale.onAndWait(c)
+            if (gen != attempt || !wanted) return@Thread
+            host = vm.ip
+            status = "> DIAL ${vm.name} ${vm.ip}:${vm.port}"
+            android.util.Log.i("MantraRemote", "dialling ${vm.name} at ${vm.ip}:${vm.port}")
+            dial = { colours ->
+                rfb?.let { old -> old.close(); baseRx += old.rxBytes.get(); baseTx += old.txBytes.get() }
+                val r = Rfb(this, colours, extendedSize = true); rfb = r
+                r.connect(vm.ip, vm.port, password)
+            }
+            main.post { if (gen == attempt && wanted) dial(coloursSaved(p)) }
+        }, "dial-linux").start()
+    }
+
     /** ✕ or the app closed: the link is closed on purpose, nothing dials again, the service ends and Tailscale goes off. */
     fun hangUp() {
-        wanted = false; attempt++; rfb?.close()
+        wanted = false; attempt++
+        // v21: a fitted Linux machine gets its old size back before the link closes
+        val r = rfb; val from = fitFrom
+        if (r != null && from != null) { r.setDesktopSize(from.first, from.second); r.closeAfterWrites() } else r?.close()
+        fitFrom = null
         // v20: closing a machine keeps Tailscale on, so the list beneath it still sees every machine; Tailscale goes
         // off only when the app closes (closeApp)
         app?.let { LinkService.stop(it) }
@@ -364,7 +400,7 @@ private class Session : Rfb.Listener {
         phase = Phase.LIVE; status = "LINK ESTABLISHED"; statusBad = false; redials = 0
         if (background) rfb?.minIntervalMs = BACKGROUND_MS
         app?.let(LinkService::start)
-        watchKeys()
+        if (linux == null) watchKeys()      // the Dock Switcher's key count lives on the Mac only
     }
     override fun onFrame() { tick++ }
     // the picture probe speaks only while the sister on the Mac does not answer
@@ -510,7 +546,14 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
             when {
                 !pl.online -> looking++
                 pl.kind == Tailnet.Kind.MAC -> if (s.phase != Phase.CONNECTING) {
+                    s.linux = null
                     prefs.edit().putString("host", pl.ip).apply(); s.start()
+                }
+                Tailnet.linuxVm(pl.ip) != null -> if (s.phase != Phase.CONNECTING) {
+                    val vm = Tailnet.linuxVm(pl.ip)!!
+                    if (Secrets.pin(prefs, Tailnet.vncKey(vm)).isEmpty()) {
+                        s.status = "${vm.name}: WRITE ITS VNC PASSWORD UNDER SETTINGS"; s.statusBad = true; settings = true
+                    } else { s.linux = vm; s.start() }
                 }
                 pl.kind == Tailnet.Kind.PHONE -> {
                     val known = Phones.all(prefs).firstOrNull { it.address.substringBefore(':') == pl.ip }
@@ -542,8 +585,8 @@ private fun Machine(pl: Tailnet.Place, busy: Boolean, onClick: () -> Unit) {
         }
         T(when {
             !pl.online -> "OFFLINE"
-            busy && pl.kind == Tailnet.Kind.MAC -> "…"
-            pl.kind == Tailnet.Kind.MAC || pl.kind == Tailnet.Kind.PHONE -> "ENTER ▶"
+            busy && (pl.kind == Tailnet.Kind.MAC || Tailnet.linuxVm(pl.ip) != null) -> "…"
+            pl.kind == Tailnet.Kind.MAC || pl.kind == Tailnet.Kind.PHONE || Tailnet.linuxVm(pl.ip) != null -> "ENTER ▶"
             else -> "SOON"
         }, ink, 15, bold = true)
     }
@@ -584,6 +627,16 @@ private fun SetupSettings(prefs: android.content.SharedPreferences, reread: () -
         Hold.session?.loginPassword = login
         saved = true
     }
+    // v21: each Linux machine's VNC password, kept encrypted on this phone (Secrets), like a phone's PIN
+    Tailnet.LINUX_VMS.forEach { vm ->
+        T("── ${vm.name} (LINUX) ─────────", Rule, 16)
+        var vncPw by remember(vm.ip) { mutableStateOf(Secrets.pin(prefs, Tailnet.vncKey(vm))) }
+        var vmSaved by remember(vm.ip) { mutableStateOf(false) }
+        Field("VNC PASSWORD (${vm.ip}:${vm.port}; KEPT ENCRYPTED ON THIS PHONE)", vncPw, secret = true) { vncPw = it; vmSaved = false }
+        Key(if (vmSaved) "SAVED" else "SAVE ${vm.name}", Modifier.fillMaxWidth(), active = vmSaved, size = 14) {
+            Secrets.putPin(prefs, Tailnet.vncKey(vm), vncPw); vmSaved = true
+        }
+    }
     Phones.all(prefs).forEach { p ->
         T("── ${p.name} ───────────────────", Rule, 16)
         var pin by remember(p.address) { mutableStateOf(Secrets.pin(prefs, p.address)) }
@@ -613,6 +666,8 @@ private val FPS = listOf("0.2" to 5000L, "0.5" to 2000L, "1" to 1000L, "2" to 50
 private const val K_CMD = 0xffeb
 // symbol, keysym, the name written under it; in the MacBook Pro's order (K_* below are compile-time constants)
 private val MOD_KEYS by lazy { listOf(Triple("⌃", K_CTRL, "control"), Triple("⌥", K_OPT, "option"), Triple("⌘", K_CMD, "command"), Triple("⇧", K_SHIFT, "shift")) }
+// v21: a Linux machine has no Command; Alt is Option's keysym
+private val LINUX_MOD_KEYS by lazy { listOf(Triple("⌃", K_CTRL, "ctrl"), Triple("⌥", K_OPT, "alt"), Triple("⇧", K_SHIFT, "shift")) }
 private const val K_OPT = 0xffe9
 private const val K_CTRL = 0xffe3
 private const val K_SHIFT = 0xffe1
@@ -631,6 +686,11 @@ private val KEY_NAMES by lazy { mapOf(K_ESC to "ESC", K_TAB to "TAB", K_RETURN t
 @Composable
 private fun Live(s: Session) {
     val rfb = s.rfb ?: return
+    // v21: on a Linux machine (chromium-vm) the Mac-only keys hide: MON, DOCK, LOGIN, ☰, ⌘
+    val lx = s.linux != null
+    val modList = if (lx) LINUX_MOD_KEYS else MOD_KEYS
+    val where = s.linux?.name?.substringBefore('-') ?: "MAC"
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
     // v20: Back closes the machine and brings the list of machines (Marko, 2.11.2026); the Dock and full screen keep theirs
     androidx.activity.compose.BackHandler(enabled = !s.full) { s.hangUp() }
     // the monitor, the zoom and where the picture stood come back after a restart (Marko, 26.10.2026)
@@ -676,7 +736,7 @@ private fun Live(s: Session) {
     var restored by remember { mutableStateOf(false) }
     LaunchedEffect(rfb, monitor, s.fbW, s.fbH) {
         rfb.setRegion(rect[0], rect[1], rect[2], rect[3])
-        val p = s.prefs
+        val p = if (lx) null else s.prefs          // v21: a Linux machine keeps the Mac's monitor, zoom and pan untouched
         if (!restored && p != null && p.getInt("monitor", -1) == monitor) {
             zoom = p.getFloat("zoom", 1f); pan = Offset(p.getFloat("pan_x", 0f), p.getFloat("pan_y", 0f))
         } else { zoom = 1f; pan = Offset.Zero }
@@ -684,7 +744,7 @@ private fun Live(s: Session) {
         p?.edit()?.putInt("monitor", monitor)?.apply()
     }
     LaunchedEffect(zoom, pan) {
-        if (!restored) return@LaunchedEffect
+        if (!restored || lx) return@LaunchedEffect
         delay(400)                                               // saved once the fingers rest
         s.prefs?.edit()?.putFloat("zoom", zoom)?.putFloat("pan_x", pan.x)?.putFloat("pan_y", pan.y)?.apply()
     }
@@ -779,7 +839,7 @@ private fun Live(s: Session) {
         else {
             // ⌃ is also pressed and let go on the Mac at once, so two taps are the Mac's double ⌃ (the Dock Switcher's
             // square, Marko 25.10.2026: "I double tap, but it does not register"); it still goes with the next key too
-            if (k == K_CTRL && !cmdHeld) { travelling("⌃"); rfb.key(K_CTRL, true); rfb.key(K_CTRL, false); rfb.probe() }
+            if (k == K_CTRL && !cmdHeld && !lx) { travelling("⌃"); rfb.key(K_CTRL, true); rfb.key(K_CTRL, false); rfb.probe() }
             mods.value = if (k in mods.value) mods.value - k else mods.value + k
         }
     }
@@ -790,6 +850,8 @@ private fun Live(s: Session) {
     fun nextTab() {
         mods.value = emptySet(); cmdHeld = false
         travelling("⇥ NEXT TAB")
+        // v21: Chrome on Linux: Ctrl+Tab
+        if (lx) { rfb.key(K_CTRL, true); rfb.key(K_TAB, true); rfb.key(K_TAB, false); rfb.key(K_CTRL, false); rfb.probe(); return }
         listOf(K_CMD, K_SHIFT, K_BRACERIGHT).forEach { rfb.key(it, true) }
         listOf(K_BRACERIGHT, K_SHIFT, K_CMD).forEach { rfb.key(it, false) }
         rfb.probe()
@@ -815,7 +877,7 @@ private fun Live(s: Session) {
     LaunchedEffect(s.pressedAt) { late = false; delay(3000); late = s.pressed.isNotEmpty() }
     val travelLine: @Composable (Modifier) -> Unit = { modifier ->
         Box(modifier.height(16.dp), contentAlignment = Alignment.Center) {
-            if (s.pressed.isNotEmpty()) T(if (late) "${s.pressed}  NOT LANDED YET" else "${s.pressed}  →  MAC", if (late) RedAlert else AmberGlow, 11, oneLine = true)
+            if (s.pressed.isNotEmpty()) T(if (late) "${s.pressed}  NOT LANDED YET" else "${s.pressed}  →  $where", if (late) RedAlert else AmberGlow, 11, oneLine = true)
         }
     }
 
@@ -984,7 +1046,7 @@ private fun Live(s: Session) {
                         }
                         return@awaitEachGesture
                     }
-                    if (!multi && !dragging && quick && zoom <= 1.01f && abs(dx) > 150f && abs(dx) > 2 * abs(dy)) {
+                    if (!lx && !multi && !dragging && quick && zoom <= 1.01f && abs(dx) > 150f && abs(dx) > 2 * abs(dy)) {
                         val next = (monitor + if (dx < 0) 1 else -1).coerceIn(0, MONITORS.size - 1)
                         if (next != monitor) { view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK); monitor = next }
                         return@awaitEachGesture
@@ -1060,7 +1122,7 @@ private fun Live(s: Session) {
     var rowViews by remember { mutableStateOf(s.prefs?.getBoolean(ROW_VIEWS, true) ?: true) }
     val modKeys: @Composable () -> Unit = {
         // as on a MacBook Pro's bottom row: control, option, command; shift after (Marko, 25.10.2026)
-        MOD_KEYS.forEach { (label, k, name) ->
+        modList.forEach { (label, k, name) ->
             Key(label, Modifier.width(56.dp), active = modOn(k), size = 20, sub = name) { toggleMod(k) }
         }
     }
@@ -1115,6 +1177,17 @@ private fun Live(s: Session) {
     // v17: ⚙ at the right end of the last row that is shown (Marko, 27.10.2026: "the settings gear icon should move to
     // the last row of action buttons, on the right side")
     val gear: @Composable RowScope.() -> Unit = { Key("⚙", Modifier.weight(0.6f), size = 22, padH = ROW_PAD) { settingsOpen = true } }
+    // v21 FIT: the Linux machine takes the size of the phone's picture, in dp (Chrome at its own scale, upright);
+    // the second tap, or leaving, gives it its old size back
+    fun fitVm() {
+        val from = s.fitFrom
+        if (!rfb.canResize) { travelling("FIT: THE MACHINE CANNOT RESIZE"); return }
+        if (from != null) { s.fitFrom = null; travelling("SIZE ${from.first}x${from.second}", picture = true); rfb.setDesktopSize(from.first, from.second); rfb.probe(); return }
+        val w = (viewSize.width / density).roundToInt() and 1.inv(); val h = (viewSize.height / density).roundToInt() and 1.inv()
+        if (w < 200 || h < 150) return
+        s.fitFrom = s.fbW to s.fbH
+        travelling("FIT ${w}x$h", picture = true); rfb.setDesktopSize(w, h); rfb.probe()
+    }
     val views: @Composable RowScope.() -> Unit = {
         // LANDSCAPE left the row (Marko, 25.10.2026: "more space for the letters"); FULL SCREEN is the sideways view.
         // ⛶ alone, without its word, and ⇄ beside TAB ▶ switches BenQ / MacBook (Marko, 26.10.2026); widths by their words
@@ -1123,10 +1196,13 @@ private fun Live(s: Session) {
         Key("⛶", Modifier.weight(0.6f), active = true, size = 22, padH = ROW_PAD) { s.full = true }
         Key("VIEW", Modifier.weight(1f), active = viewOnly, size = 14, padH = ROW_PAD) { viewOnly = !viewOnly; if (viewOnly) mouseMode = false }   // lit = view only (Marko, 26.10.2026)
         Key("⇥", Modifier.weight(0.6f), size = 22, padH = ROW_PAD) { nextTab() }
-        Key("⇄", Modifier.weight(0.7f), size = 22, sub = if (monitor == 0) "BENQ" else "MACBOOK", padH = 2) { monitor = 1 - monitor }
-        Key("DOCK", Modifier.weight(1f), size = 14, padH = ROW_PAD, onLongClick = { dock() }) { dockHiding() }
-        Key("LOGIN", Modifier.weight(1.05f), size = 14, padH = ROW_PAD) { login() }
-        Key("☰", Modifier.weight(0.6f), size = 22, padH = ROW_PAD) { menuOn() }
+        if (lx) Key(if (s.fitFrom != null) "FITTED" else "FIT", Modifier.weight(1f), active = s.fitFrom != null, size = 14, padH = ROW_PAD) { fitVm() }
+        else {
+            Key("⇄", Modifier.weight(0.7f), size = 22, sub = if (monitor == 0) "BENQ" else "MACBOOK", padH = 2) { monitor = 1 - monitor }
+            Key("DOCK", Modifier.weight(1f), size = 14, padH = ROW_PAD, onLongClick = { dock() }) { dockHiding() }
+            Key("LOGIN", Modifier.weight(1.05f), size = 14, padH = ROW_PAD) { login() }
+            Key("☰", Modifier.weight(0.6f), size = 22, padH = ROW_PAD) { menuOn() }
+        }
     }
 
     // ⚙: the meter, read with its words; the meter on the screen or not; ✕ quits (Marko, 26.10.2026: "quitting the app
@@ -1147,7 +1223,7 @@ private fun Live(s: Session) {
             // v16 (Marko, 26.10.2026: "in the Mantra remote control settings, I want to see all the available devices
             // I can connect to ... control my computer or the Pixel 7 from my own one app, switching between them")
             T("DEVICES: a tap shows it on this screen", AmberDim, 12)
-            Key("THE MAC  " + s.host.ifEmpty { "not connected" }, Modifier.fillMaxWidth(), active = s.phone == null, size = 13) {
+            Key((s.linux?.name ?: "THE MAC") + "  " + s.host.ifEmpty { "not connected" }, Modifier.fillMaxWidth(), active = s.phone == null, size = 13) {
                 s.phone = null; settingsOpen = false
             }
             var phones by remember { mutableStateOf(Phones.all(s.prefs)) }
@@ -1187,7 +1263,7 @@ private fun Live(s: Session) {
                 // QUIT APP on the left, BACK (leaves ⚙) on the right (Marko, 26.10.2026)
                 Key("✕ QUIT APP", Modifier.weight(1f), size = 14) { settingsOpen = false; s.hangUp(); activity.finish() }
                 // v16: the link closed, the first screen back, to choose another place
-                Key("✕ CLOSE MAC", Modifier.weight(1f), size = 14) { settingsOpen = false; s.phone = null; s.hangUp() }
+                Key(if (lx) "✕ CLOSE" else "✕ CLOSE MAC", Modifier.weight(1f), size = 14) { settingsOpen = false; s.phone = null; s.hangUp() }
                 Key("BACK", Modifier.weight(1f), size = 14) { settingsOpen = false }
             }
         }
@@ -1221,8 +1297,8 @@ private fun Live(s: Session) {
             // the CAMERA language (MANTRA_MANIFEST language-camera.md): the picture is sacred, the keys are words in
             // the black bands beside it, their colour is their state. Left: what to press. Right: where to look (swapped at Marko's word, 25.10.2026).
             Column(Modifier.width(76.dp).fillMaxHeight()) {
-                RailKey("LOGIN", null, if (s.loginPassword.isEmpty()) RailState.DEAD else RailState.OFF) { login() }
-                MOD_KEYS.forEach { (label, k, name) ->
+                if (!lx) RailKey("LOGIN", null, if (s.loginPassword.isEmpty()) RailState.DEAD else RailState.OFF) { login() }
+                modList.forEach { (label, k, name) ->
                     RailKey(label, name, if (k == K_CMD && cmdHeld) RailState.ON else if (modOn(k)) RailState.ARMED else RailState.OFF) { toggleMod(k) }
                 }
                 RailKey("ESC", null, RailState.OFF) { tapKey(K_ESC) }
@@ -1238,7 +1314,8 @@ private fun Live(s: Session) {
             Column(Modifier.width(76.dp).fillMaxHeight()) {
                 // v18: one key toggles the monitors, its label the one on screen (Marko, 2.11.2026: "I need only one
                 // button which toggles the monitors"); with more than two it steps to the next
-                RailKey("MON ${monitor + 1}", MONITORS[monitor].name.substringAfter(' '), RailState.ON) { monitor = (monitor + 1) % MONITORS.size }
+                if (lx) RailKey("FIT", null, if (s.fitFrom != null) RailState.ON else RailState.OFF) { fitVm() }
+                else RailKey("MON ${monitor + 1}", MONITORS[monitor].name.substringAfter(' '), RailState.ON) { monitor = (monitor + 1) % MONITORS.size }
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
                 RailKey("MOUSE", null, if (mouseMode) RailState.ON else RailState.OFF) { setMouse(!mouseMode) }
                 if (mouseMode) {
@@ -1247,7 +1324,7 @@ private fun Live(s: Session) {
                     RailKey("D", "DRAG", if (dragHeld) RailState.ON else RailState.OFF) { toggleDrag() }
                 }
                 RailKey("NEXT", "TAB", RailState.OFF) { nextTab() }
-                RailKey("DOCK", null, RailState.OFF, onLongClick = { dock() }) { dockHiding() }
+                if (!lx) RailKey("DOCK", null, RailState.OFF, onLongClick = { dock() }) { dockHiding() }
                 RailKey("SCROLL", null, if (scrollMode) RailState.ON else RailState.OFF) { scrollMode = !scrollMode }
                 RailKey("FPS", FPS[fpsIndex].first, RailState.OFF, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
                 RailKey("COL", colours.label, RailState.OFF, onLongClick = { coloursMenu = true }) {
@@ -1263,7 +1340,7 @@ private fun Live(s: Session) {
                 Modifier.width(300.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { monitors(Modifier.weight(1f)); close() }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { if (!lx) monitors(Modifier.weight(1f)); close() }
                 meter()
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { modKeys() }
                 specialKeys.chunked(4).forEach { row ->
