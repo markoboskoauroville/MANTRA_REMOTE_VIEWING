@@ -148,3 +148,11 @@ the address. It's always refreshing when I want to connect."
   ~/.android/debug.keystore; on the Mac: `base64 -i ~/.android/debug.keystore | gh secret set ANDROID_DEBUG_KEYSTORE_B64
   -R markoboskoauroville/MANTRA_REMOTE_VNC_TAILSCALE`), so CI builds install over Mac builds. Building on the Mac is no
   longer the way; work goes to main (MANTRA_MANIFEST rule, 3.11.2026).
+
+## v25 (3.11.2026): a refused login is never dialled again
+Pixel 7 test of v24 (Termux session "i am pixel phone"): the list filled at once (MACBOOK-PRO 100.79.251.19,
+CHROMIUM-VM 100.102.86.30; MagicDNS resolve worked, the Mac answered at home on 192.168.1.102), but with the passwords
+wiped by the uninstall one ENTER gave six "LOGIN REFUSED" in 38 s: `onClosed` redialled every fall. Now a refused
+login (and REFUSED / NO VNC PASSWORD / NOT A VNC SERVER) stops: no redial, the service stops, SETTINGS opens with
+"CHECK THE … PASSWORD". ENTER on the Mac with no password saved dials nothing and opens SETTINGS.
+Still to test on the phone (needs Marko's passwords typed in SETTINGS): picture, L/R lock, CONNECT TO OTHER SESSION.

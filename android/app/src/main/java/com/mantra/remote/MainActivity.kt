@@ -300,6 +300,8 @@ private class Session : Rfb.Listener {
         android.util.Log.i("MantraRemote", "landed: $pressed in ${System.currentTimeMillis() - pressedAt} ms (${if (sisterOk) "the Mac saw it" else "picture probe"})")
         pressed = ""; byPicture = false
     }
+    /** v25: the first page opens SETTINGS (a password is missing or was refused). */
+    var openSettings by mutableStateOf(false)
     /** v23: why Tailscale is not standing ("" while it stands), shown with OPEN TAILSCALE on the first page. */
     var tailscaleDown by mutableStateOf("")
     /** A link is wanted (CONNECT was pressed, ✕ not): a link that falls is dialled again on return. */
@@ -324,6 +326,12 @@ private class Session : Rfb.Listener {
         val p = prefs ?: return
         linux?.let { startLinux(c, p, it); return }
         loginPassword = p.getString("login", "") ?: ""
+        // v25: no Mac password saved at all: nothing is dialled, SETTINGS opens
+        if (loginPassword.isEmpty() && (p.getString("password", "") ?: "").isEmpty()) {
+            phase = Phase.SETUP; statusBad = true; openSettings = true
+            status = "THE MAC NEEDS ITS PASSWORD: WRITE IT UNDER SETTINGS, THEN ENTER AGAIN"
+            return
+        }
         wanted = true; phase = Phase.CONNECTING; status = "> TAILSCALE ON"; statusBad = false
         rfb?.close(); rfb = null; baseRx = 0; baseTx = 0
         LinkService.start(c)
@@ -459,6 +467,19 @@ private class Session : Rfb.Listener {
     override fun onLanded() { if (!sisterOk || byPicture) main.post { landed() } }
     override fun onClosed(reason: String) {
         phase = Phase.SETUP; status = reason.uppercase(); statusBad = true
+        // v25 (Pixel 7 test, 3.11.2026: one tap with no password gave six refused logins in 38 s): a refused login is
+        // never dialled again; a wrong password tried over and over can lock the account. SETTINGS opens instead.
+        val r = reason.uppercase()
+        if (r.startsWith("LOGIN REFUSED") || r.startsWith("REFUSED") || r.startsWith("NO VNC PASSWORD") || r.startsWith("NOT A VNC SERVER")) {
+            wanted = false; attempt++
+            app?.let { LinkService.stop(it) }
+            if (r.startsWith("LOGIN REFUSED")) {
+                status = "LOGIN REFUSED: CHECK THE ${linux?.name ?: "MAC"} PASSWORD UNDER SETTINGS, THEN ENTER AGAIN"
+                openSettings = true
+            }
+            android.util.Log.w("MantraRemote", "not dialled again: $reason")
+            return
+        }
         // in front, a fall is dialled again by itself (Tailscale coming up changes the network under the link);
         // behind, on return (onStart)
         if (wanted && !background && redials < MAX_REDIALS) { redials++; main.postDelayed({ if (wanted && phase == Phase.SETUP) start() }, 2000) }
@@ -575,6 +596,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
     var settings by remember { mutableStateOf(false) }
     var online by remember { mutableStateOf<List<Tailnet.Place>?>(null) }
     var looking by remember { mutableStateOf(0) }
+    LaunchedEffect(s.openSettings) { if (s.openSettings) { settings = true; s.openSettings = false } }
     LaunchedEffect(looking) {
         online = null
         online = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
