@@ -300,6 +300,8 @@ private class Session : Rfb.Listener {
         android.util.Log.i("MantraRemote", "landed: $pressed in ${System.currentTimeMillis() - pressedAt} ms (${if (sisterOk) "the Mac saw it" else "picture probe"})")
         pressed = ""; byPicture = false
     }
+    /** v23: why Tailscale is not standing ("" while it stands), shown with OPEN TAILSCALE on the first page. */
+    var tailscaleDown by mutableStateOf("")
     /** A link is wanted (CONNECT was pressed, ✕ not): a link that falls is dialled again on return. */
     var wanted = false
     /** v21: the Linux machine entered (chromium-vm), or null for the Mac. Mac-only keys hide while it is set. */
@@ -327,15 +329,22 @@ private class Session : Rfb.Listener {
         LinkService.start(c)
         val gen = ++attempt
         Thread({
-            Tailscale.onAndWait(c)
+            // v23: every ENTER (and every redial) checks Tailscale and looks the Mac's address up again, fresh
+            val tsUp = Tailscale.ensure(c) { if (gen == attempt) status = it }
+            tailscaleDown = if (tsUp) "" else Tailscale.whyDown(c)
+            if (gen != attempt || !wanted) return@Thread
             val port = p.getString("port", "5900")?.toIntOrNull() ?: 5900
-            val host = MacFinder.find(c, port, listOf(p.getString("host", "") ?: "", p.getString("lan_host", "") ?: "")) {
+            val fresh = if (tsUp) { status = "> TAILSCALE: LOOKING UP THE MAC'S ADDRESS"; Tailnet.macAddresses(c, p) }
+                else listOfNotNull(p.getString(Tailnet.MAC_IP, null))
+            android.util.Log.i("MantraRemote", "tailscale up=$tsUp own=${Tailscale.ownIp()} mac candidates=$fresh")
+            val host = MacFinder.find(c, port, fresh + listOf(p.getString("host", "") ?: "", p.getString("lan_host", "") ?: "")) {
                 if (gen == attempt) status = it
             }
             if (gen != attempt || !wanted) return@Thread
             if (host == null) {
                 phase = Phase.SETUP; statusBad = true
-                status = "THE MAC DOES NOT ANSWER. IS IT AWAKE, IS SCREEN SHARING ON? CONNECT TRIES AGAIN."
+                status = if (!tsUp) tailscaleDown + " (THE HOME WI-FI DID NOT ANSWER EITHER)"
+                    else "THE MAC DOES NOT ANSWER AT ${fresh.joinToString(", ")}. IS IT AWAKE, ON TAILSCALE, SCREEN SHARING ON? ENTER TRIES AGAIN."
                 return@Thread
             }
             // the home address is remembered: next time at home it is tried first among the others
@@ -366,15 +375,21 @@ private class Session : Rfb.Listener {
         LinkService.start(c)
         val gen = ++attempt
         Thread({
-            Tailscale.onAndWait(c)
+            val tsUp = Tailscale.ensure(c) { if (gen == attempt) status = it }
+            tailscaleDown = if (tsUp) "" else Tailscale.whyDown(c)
             if (gen != attempt || !wanted) return@Thread
-            host = vm.ip
-            status = "> DIAL ${vm.name} ${vm.ip}:${vm.port}"
-            android.util.Log.i("MantraRemote", "dialling ${vm.name} at ${vm.ip}:${vm.port}")
+            if (!tsUp) { phase = Phase.SETUP; statusBad = true; status = tailscaleDown; return@Thread }
+            // v23: its address looked up again on every ENTER
+            status = "> TAILSCALE: LOOKING UP ${vm.name}"
+            val ip = Tailnet.vmAddress(c, p, vm)
+            if (gen != attempt || !wanted) return@Thread
+            host = ip
+            status = "> DIAL ${vm.name} $ip:${vm.port}"
+            android.util.Log.i("MantraRemote", "dialling ${vm.name} at $ip:${vm.port}")
             dial = { colours ->
                 rfb?.let { old -> old.close(); baseRx += old.rxBytes.get(); baseTx += old.txBytes.get() }
                 val r = Rfb(this, colours, extendedSize = true); rfb = r
-                r.connect(vm.ip, vm.port, password)
+                r.connect(ip, vm.port, password)
             }
             main.post { if (gen == attempt && wanted) dial(coloursSaved(p)) }
         }, "dial-linux").start()
@@ -525,7 +540,11 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
     var looking by remember { mutableStateOf(0) }
     LaunchedEffect(looking) {
         online = null
-        online = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Tailscale.onAndWait(s.app ?: return@withContext emptyList()); Tailnet.places(prefs) }
+        online = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val c = s.app ?: return@withContext emptyList()
+            s.tailscaleDown = if (Tailscale.ensure(c)) "" else Tailscale.whyDown(c)
+            Tailnet.places(c, prefs)
+        }
     }
     Column(
         Modifier.fillMaxSize().imePadding().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(20.dp),
@@ -545,21 +564,28 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
         }
         T("── MY MACHINES ─────────────────", Rule, 16)
         val list = online
+        if (s.tailscaleDown.isNotEmpty()) {
+            T("> " + s.tailscaleDown, RedAlert, 14)
+            Key("OPEN TAILSCALE", Modifier.fillMaxWidth(), size = 14) { s.app?.let(Tailscale::openApp) }
+        }
         if (list == null) T("> Tailscale is reading your machines …", AmberDim, 14)
         else if (list.isEmpty()) T("> no machine answers", RedAlert, 14)
         else list.forEach { pl -> Machine(pl, busy = s.phase == Phase.CONNECTING) {
             when {
-                !pl.online -> looking++
+                // v23: a Mac or a VM shown OFFLINE is entered all the same: ENTER checks Tailscale and looks its
+                // address up again, so a list read before Tailscale stood (or with an old address) never blocks it
                 pl.kind == Tailnet.Kind.MAC -> if (s.phase != Phase.CONNECTING) {
                     s.linux = null
-                    prefs.edit().putString("host", pl.ip).apply(); s.start()
+                    prefs.edit().putString("host", pl.ip).putString(Tailnet.MAC_NAME, pl.name.lowercase()).apply(); s.start()
+                    looking++                                           // and the list beneath is read again too
                 }
-                Tailnet.linuxVm(pl.ip) != null -> if (s.phase != Phase.CONNECTING) {
-                    val vm = Tailnet.linuxVm(pl.ip)!!
+                Tailnet.linuxVm(pl) != null -> if (s.phase != Phase.CONNECTING) {
+                    val vm = Tailnet.linuxVm(pl)!!
                     if (Secrets.pin(prefs, Tailnet.vncKey(vm)).isEmpty()) {
                         s.status = "${vm.name}: WRITE ITS VNC PASSWORD UNDER SETTINGS"; s.statusBad = true; settings = true
                     } else { s.linux = vm; s.start() }
                 }
+                !pl.online -> looking++
                 pl.kind == Tailnet.Kind.PHONE -> {
                     val known = Phones.all(prefs).firstOrNull { it.address.substringBefore(':') == pl.ip }
                     s.phone = known ?: Phone(pl.name, pl.ip + ":5555").also { Phones.add(prefs, it) }
@@ -589,9 +615,10 @@ private fun Machine(pl: Tailnet.Place, busy: Boolean, onClick: () -> Unit) {
             T(pl.os.lowercase() + "  " + pl.ip, AmberDim, 13)
         }
         T(when {
+            busy && (pl.kind == Tailnet.Kind.MAC || Tailnet.linuxVm(pl) != null) -> "…"
+            !pl.online && (pl.kind == Tailnet.Kind.MAC || Tailnet.linuxVm(pl) != null) -> "OFFLINE · TRY ▶"
             !pl.online -> "OFFLINE"
-            busy && (pl.kind == Tailnet.Kind.MAC || Tailnet.linuxVm(pl.ip) != null) -> "…"
-            pl.kind == Tailnet.Kind.MAC || pl.kind == Tailnet.Kind.PHONE || Tailnet.linuxVm(pl.ip) != null -> "ENTER ▶"
+            pl.kind == Tailnet.Kind.MAC || pl.kind == Tailnet.Kind.PHONE || Tailnet.linuxVm(pl) != null -> "ENTER ▶"
             else -> "SOON"
         }, ink, 15, bold = true)
     }

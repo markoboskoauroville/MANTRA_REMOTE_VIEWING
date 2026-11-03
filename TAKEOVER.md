@@ -114,3 +114,25 @@ Tap the title on the first page (the list of machines) → GitHub releases/lates
   notification permission allowed, the CHROMIUM-VM VNC password saved under SETTINGS (typed from the key file into
   the verified field, never shown). The ENTER / picture / Back test on the real phone was not done: Marko said
   "wait until I say continue". Tailscale on the phone was last seen 6 days before: check it is on before ENTER.
+
+## v23 (3.11.2026): ENTER always checks Tailscale and looks the address up fresh
+Marko, 3.11.2026, on the Pixel 7: "It cannot connect to the Mac session. Looks like it's not picking up the right
+address or it's not connected with Tailscale ... when I click to connect, checking Tailscale address and connecting to
+the address. It's always refreshing when I want to connect."
+- Causes found in the code: without the OAuth key the Mac was only ever tried at the address written in the source
+  (100.79.251.19, measured 26.10.2026) and chromium-vm at 100.102.86.30; `Tailscale.isUp` counted any VPN as "up" even
+  with Tailscale signed out (no 100.x address on the phone); the CONNECT broadcast was sent once and lost if Tailscale's
+  process slept; a machine shown OFFLINE (list read before Tailscale stood) could not be entered, a tap only re-read
+  the list.
+- `Tailscale.ensure()`: up = VPN AND the phone's own 100.x address; the broadcast repeated every 4 s, at most 15 s;
+  `whyDown()` says why in words; the first page shows it with OPEN TAILSCALE.
+- `Tailscale.resolve(name)`: the VPN network's resolver (short name + its search domain), else a small DNS client
+  straight to 100.100.100.100 with the tailnet's domain learnt from the PTR of the phone's own 100.x address.
+- `Tailnet.macAddresses()` / `vmAddress()`: fresh lookup (DNS, then the API if keyed), remembered as `mac_ts_ip` /
+  `vm_ip:<NAME>`, then the old written address as the last fallback. `Session.start()` and `startLinux()` do it on
+  every ENTER and every redial; the list does it on every read. `linuxVm()` matches by name too.
+- ENTER on a Mac/VM shown OFFLINE ("OFFLINE · TRY ▶") now tries it anyway (with the fresh lookup).
+- Logcat (tag MantraRemote): `resolve macbook-pro → [...]`, `tailscale up=… own=… mac candidates=[...]`,
+  `tailscale not ready after …`.
+- Built in the cloud (compiles, v23 APK, signed with the cloud's debug key, NOT the Mac's): not yet tried on a phone.
+  Build on the Mac for an in-place update over v22.

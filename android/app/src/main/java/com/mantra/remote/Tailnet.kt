@@ -1,5 +1,6 @@
 package com.mantra.remote
 
+import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -31,7 +32,40 @@ object Tailnet {
     /** v21: a Linux machine with a VNC server this app can enter (TigerVNC, VNC password, Tailscale only). */
     data class LinuxVm(val name: String, val ip: String, val port: Int)
     val LINUX_VMS = listOf(LinuxVm("CHROMIUM-VM", "100.102.86.30", 5901))
-    fun linuxVm(ip: String) = LINUX_VMS.firstOrNull { it.ip == ip }
+    /** v23: matched by address or by name, so a VM whose Tailscale address changed is still the same VM. */
+    fun linuxVm(ip: String, name: String = "") = LINUX_VMS.firstOrNull { it.ip == ip || it.name.equals(name, ignoreCase = true) }
+    fun linuxVm(pl: Place) = linuxVm(pl.ip, pl.name)
+
+    /** Prefs: the Mac's Tailscale name and the address it had the last time it was looked up. */
+    const val MAC_NAME = "mac_ts_name"
+    const val MAC_IP = "mac_ts_ip"
+
+    /**
+     * v23: the address of [name] on the tailnet right now: Tailscale's DNS first, then the tailnet API (when its key is
+     * saved); remembered under [saveAs]. Empty when neither knows it (the caller then falls back on what it had).
+     */
+    fun lookup(c: Context, prefs: SharedPreferences?, name: String, os: String, saveAs: String? = null): List<String> {
+        val found = LinkedHashSet<String>()
+        found += Tailscale.resolve(c, name)
+        if (found.isEmpty()) fromApi(prefs)?.let { all ->
+            all.filter { it.first.equals(name, true) }.forEach { found += it.second }
+            if (found.isEmpty()) all.filter { kindOf(it.third) == kindOf(os) }.forEach { found += it.second }
+        }
+        if (saveAs != null && found.isNotEmpty()) prefs?.edit()?.putString(saveAs, found.first())?.apply()
+        return found.toList()
+    }
+
+    /** The Mac's addresses to try now: freshly looked up, then the last one seen, then the one measured 26.10.2026. */
+    fun macAddresses(c: Context, prefs: SharedPreferences?): List<String> {
+        val name = prefs?.getString(MAC_NAME, null)?.ifBlank { null } ?: MacFinder.MAC_TAILSCALE_NAME
+        val fresh = lookup(c, prefs, name, "macOS", saveAs = MAC_IP)
+        return (fresh + listOfNotNull(prefs?.getString(MAC_IP, null), MacFinder.MAC_TAILSCALE_IP)).filter { it.isNotBlank() }.distinct()
+    }
+
+    /** A Linux VM's address now: looked up by its name, else the one written in [LINUX_VMS]. */
+    fun vmAddress(c: Context, prefs: SharedPreferences?, vm: LinuxVm): String =
+        lookup(c, prefs, vm.name.lowercase(), "linux", saveAs = "vm_ip:" + vm.name).firstOrNull()
+            ?: prefs?.getString("vm_ip:" + vm.name, null)?.ifBlank { null } ?: vm.ip
     /** Where its VNC password is kept, encrypted (Secrets), never in the clear. */
     fun vncKey(vm: LinuxVm) = "vnc:" + vm.ip
 
@@ -79,18 +113,21 @@ object Tailnet {
     }
 
     /** Every place, tried in parallel; the ones that answer first in the list. Runs off the main thread. */
-    fun places(prefs: SharedPreferences?): List<Place> {
+    fun places(c: Context, prefs: SharedPreferences?): List<Place> {
         val me = own()
         val api = fromApi(prefs)
         // v19: the Oracle machine (chromium-vm, Marko 2.11.2026) is known even before the OAuth client is pasted
-        val known = api ?: (listOf(Triple("macbook-pro", MacFinder.MAC_TAILSCALE_IP, "macOS"), Triple("chromium-vm", "100.102.86.30", "linux")) +
+        // v23: their addresses asked of Tailscale's DNS each time, not taken as written
+        val macName = prefs?.getString(MAC_NAME, null)?.ifBlank { null } ?: MacFinder.MAC_TAILSCALE_NAME
+        val known = api ?: (listOf(Triple(macName, macAddresses(c, prefs).first(), "macOS")) +
+            LINUX_VMS.map { Triple(it.name.lowercase(), vmAddress(c, prefs, it), "linux") } +
             Phones.all(prefs).map { Triple(it.name, it.address.substringBefore(':'), "android") })
         val pool = Executors.newFixedThreadPool(8)
         val list = known.filter { it.second !in me }.distinctBy { it.second }.map { (name, ip, os) ->
             pool.submit<Place> {
                 val k = kindOf(os)
                 // v21: a Linux machine with VNC answers on its VNC port (chromium-vm: 5901), else on ssh
-                val up = linuxVm(ip)?.let { answers(ip, it.port) } ?: answers(ip, port(k))
+                val up = linuxVm(ip, name)?.let { answers(ip, it.port) } ?: answers(ip, port(k))
                 Place(name.uppercase(), ip, os, k, up)
             }
         }.mapNotNull { runCatching { it.get(5, TimeUnit.SECONDS) }.getOrNull() }
