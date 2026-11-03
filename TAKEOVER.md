@@ -136,3 +136,15 @@ the address. It's always refreshing when I want to connect."
   `tailscale not ready after …`.
 - Built in the cloud (compiles, v23 APK, signed with the cloud's debug key, NOT the Mac's): not yet tried on a phone.
   Build on the Mac for an in-place update over v22.
+
+## v24 (3.11.2026): L/R lock, CONNECT TO OTHER SESSION, built by GitHub Actions
+- L and R (row and full-screen rail): a short press clicks; a long press locks that button down (lit, "LOCKED"),
+  moving the pointer then drags with it; another long press lets it go (Marko, 3.11.2026). `held` (0 / 1 / 4) replaces
+  `dragHeld`; D is the left lock. Fixed on the way: in 🖱 MOUSE mode the moves sent button 0 during a lock (let it go).
+- ⚙ → ⇄ CONNECT TO OTHER SESSION: every machine of the tailnet, read fresh; a tap closes this link and enters that one
+  (`Session.enter(place)`, shared with the first page; `isCurrent` marks the one on the screen "(NOW)").
+- `.github/workflows/android.yml`: every push to main that touches `android/` builds the APK and publishes release
+  v<appVersion> as Latest. Signing needs the secret ANDROID_DEBUG_KEYSTORE_B64 (base64 of the Mac's
+  ~/.android/debug.keystore; on the Mac: `base64 -i ~/.android/debug.keystore | gh secret set ANDROID_DEBUG_KEYSTORE_B64
+  -R markoboskoauroville/MANTRA_REMOTE_VNC_TAILSCALE`), so CI builds install over Mac builds. Building on the Mac is no
+  longer the way; work goes to main (MANTRA_MANIFEST rule, 3.11.2026).

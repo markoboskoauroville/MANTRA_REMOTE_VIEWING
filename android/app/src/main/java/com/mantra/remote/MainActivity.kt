@@ -123,8 +123,8 @@ private fun helpText(label: String): String {
         l == "✕" -> "Closes the link to the Mac and goes back to the settings page."
         l.contains("KEYS") || l == "⌨" -> "Opens the phone's keyboard. What you type is typed on the Mac."
         l == "🖱" || l == "MOUSE" -> "MOUSE: while it is lit, one finger moves the Mac's pointer to where it touches, without clicking. Three fingers tapped together click, two fingers tapped together right-click, where the pointer stands. Spreading, pinching and three-finger panning still work."
-        l == "L" -> "The Mac's left mouse button, pressed once where the pointer stands (shown while 🖱 MOUSE is lit)."
-        l == "R" -> "The Mac's right mouse button, pressed once where the pointer stands (shown while 🖱 MOUSE is lit)."
+        l == "L" -> "The left mouse button: a short press clicks where the pointer stands; a long press locks it down (lit, LOCKED), moving the pointer then drags; another long press lets it go."
+        l == "R" -> "The right mouse button: a short press right-clicks where the pointer stands; a long press locks it down (lit, LOCKED); another long press lets it go."
         l == "D" -> "DRAG: the first press holds the Mac's left button down where the pointer stands; moving the pointer then drags; the second press lets the button go (lit green while held)."
         l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
@@ -395,6 +395,43 @@ private class Session : Rfb.Listener {
         }, "dial-linux").start()
     }
 
+    /**
+     * v24: enter a machine of the list, from the first page or from ⚙ CONNECT TO OTHER SESSION (Marko, 3.11.2026: "in
+     * my settings, add a button connect to other session, and then I can switch"). A link already open is closed
+     * first. False when the machine still needs its password under SETTINGS.
+     */
+    fun enter(pl: Tailnet.Place): Boolean {
+        val p = prefs ?: return true
+        val vm = Tailnet.linuxVm(pl)
+        when {
+            pl.kind == Tailnet.Kind.MAC -> {
+                if (phase != Phase.SETUP) hangUp()
+                phone = null; linux = null
+                p.edit().putString("host", pl.ip).putString(Tailnet.MAC_NAME, pl.name.lowercase()).apply(); start()
+            }
+            vm != null -> {
+                if (Secrets.pin(p, Tailnet.vncKey(vm)).isEmpty()) {
+                    status = "${vm.name}: WRITE ITS VNC PASSWORD UNDER SETTINGS"; statusBad = true; return false
+                }
+                if (phase != Phase.SETUP) hangUp()
+                phone = null; linux = vm; start()
+            }
+            pl.kind == Tailnet.Kind.PHONE -> {
+                val known = Phones.all(p).firstOrNull { it.address.substringBefore(':') == pl.ip }
+                phone = known ?: Phone(pl.name, pl.ip + ":5555").also { Phones.add(p, it) }
+            }
+            else -> status = "${pl.name}: ENTERING THIS MACHINE COMES IN A NEXT VERSION"
+        }
+        return true
+    }
+
+    /** True when [pl] is the machine on the screen now. */
+    fun isCurrent(pl: Tailnet.Place): Boolean = when {
+        phone != null -> phone?.address?.substringBefore(':') == pl.ip
+        linux != null -> Tailnet.linuxVm(pl) == linux
+        else -> pl.kind == Tailnet.Kind.MAC && phase != Phase.SETUP
+    }
+
     /** ✕ or the app closed: the link is closed on purpose, nothing dials again, the service ends and Tailscale goes off. */
     fun hangUp() {
         wanted = false; attempt++
@@ -574,23 +611,11 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
             when {
                 // v23: a Mac or a VM shown OFFLINE is entered all the same: ENTER checks Tailscale and looks its
                 // address up again, so a list read before Tailscale stood (or with an old address) never blocks it
-                pl.kind == Tailnet.Kind.MAC -> if (s.phase != Phase.CONNECTING) {
-                    s.linux = null
-                    prefs.edit().putString("host", pl.ip).putString(Tailnet.MAC_NAME, pl.name.lowercase()).apply(); s.start()
-                    looking++                                           // and the list beneath is read again too
-                }
-                Tailnet.linuxVm(pl) != null -> if (s.phase != Phase.CONNECTING) {
-                    val vm = Tailnet.linuxVm(pl)!!
-                    if (Secrets.pin(prefs, Tailnet.vncKey(vm)).isEmpty()) {
-                        s.status = "${vm.name}: WRITE ITS VNC PASSWORD UNDER SETTINGS"; s.statusBad = true; settings = true
-                    } else { s.linux = vm; s.start() }
+                (pl.kind == Tailnet.Kind.MAC || Tailnet.linuxVm(pl) != null) -> if (s.phase != Phase.CONNECTING) {
+                    if (!s.enter(pl)) settings = true
                 }
                 !pl.online -> looking++
-                pl.kind == Tailnet.Kind.PHONE -> {
-                    val known = Phones.all(prefs).firstOrNull { it.address.substringBefore(':') == pl.ip }
-                    s.phone = known ?: Phone(pl.name, pl.ip + ":5555").also { Phones.add(prefs, it) }
-                }
-                else -> s.status = "${pl.name}: ENTERING A LINUX MACHINE COMES IN THE NEXT VERSION"
+                else -> s.enter(pl)
             }
         } }
         Key("↻ LOOK AGAIN", Modifier.fillMaxWidth(), size = 14) { looking++ }
@@ -752,7 +777,9 @@ private fun Live(s: Session) {
     var mouseMode by remember { mutableStateOf(s.prefs?.getBoolean("mouse_mode", false) ?: false) }
     LaunchedEffect(mouseMode) { s.prefs?.edit()?.putBoolean("mouse_mode", mouseMode)?.apply() }
     var mouseAt by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var dragHeld by remember { mutableStateOf(false) }
+    // v24: the mouse button locked down: 0 none, 1 the left (L long press, or D), 4 the right (R long press)
+    var held by remember { mutableIntStateOf(0) }
+    val dragHeld = held == 1
     // VIEW ONLY is remembered like FPS: watching stays watching after a restart
     var viewOnly by remember { mutableStateOf(s.prefs?.getBoolean("view_only", false) ?: false) }
     LaunchedEffect(rfb, viewOnly) { rfb.viewOnly = viewOnly; s.prefs?.edit()?.putBoolean("view_only", viewOnly)?.apply() }
@@ -832,7 +859,7 @@ private fun Live(s: Session) {
         // VIEW ONLY lets no click through: say so, instead of a click that seems sent (Marko, 27.10.2026: "the mouse
         // clicks are not landing")
         if (viewOnly) { travelling("VIEW ONLY: NO CLICK"); return }
-        if (dragHeld) { dragHeld = false; Thread { rfb.pointer(x, y, 0) }.start() }   // a click ends a drag first
+        if (held != 0) { held = 0; Thread { rfb.pointer(x, y, 0) }.start() }   // a click ends a lock first
         travelling(if (button == 1) "CLICK" else "RIGHT CLICK", picture = true)
         // the pointer goes there first, the button is held 50 ms, as a hand does; a press and a release in the same
         // instant can be lost on the Mac
@@ -846,18 +873,24 @@ private fun Live(s: Session) {
     // v18: DRAG, the third button of the mouse (Marko, 30.10.2026: "Drag means pressing the key and keeping it down until
     // I press drag again"): the first press holds the left button where the pointer stands, every move of the pointer
     // then drags, the second press lets it go
-    fun toggleDrag() {
+    // v24 (Marko, 3.11.2026: "Short press is clicking, long press locking, and same for the right mouse button.
+    // Unlocking ... again, long press"): a long press on L or R locks that button down (lit), a second long press lets
+    // it go; while locked, moving the pointer drags with it. D stays the left lock as before.
+    fun toggleHold(button: Int) {
         val (x, y) = mouseAt ?: (rect[0] + rect[2] / 2 to rect[1] + rect[3] / 2)
-        if (!dragHeld && viewOnly) { travelling("VIEW ONLY: NO DRAG"); return }
-        dragHeld = !dragHeld
-        val down = dragHeld
-        travelling(if (down) "DRAG: BUTTON DOWN" else "DRAG: BUTTON UP", picture = true)
+        if (held != button && viewOnly) { travelling("VIEW ONLY: NO LOCK"); return }
+        val was = held
+        held = if (held == button) 0 else button
+        val now = held
+        val name = if (button == 1) "LEFT" else "RIGHT"
+        travelling(if (now != 0) "$name BUTTON LOCKED DOWN" else "$name BUTTON LET GO", picture = true)
         Thread {
-            if (down) { rfb.pointer(x, y, 0); Thread.sleep(30); rfb.pointer(x, y, 1) } else rfb.pointer(x, y, 0)
+            if (now != 0) { rfb.pointer(x, y, 0); Thread.sleep(30); rfb.pointer(x, y, now) } else if (was != 0) rfb.pointer(x, y, 0)
             rfb.probe()
         }.start()
     }
-    fun setMouse(on: Boolean) { mouseMode = on; if (on) { scrollMode = false; viewOnly = false } else if (dragHeld) toggleDrag() }
+    fun toggleDrag() = toggleHold(1)
+    fun setMouse(on: Boolean) { mouseMode = on; if (on) { scrollMode = false; viewOnly = false } else if (held != 0) toggleHold(held) }
     LaunchedEffect(Unit) { if (mouseMode && viewOnly) viewOnly = false }
     fun tapKey(k: Int) {
         travelling((mods.value.mapNotNull { m -> MOD_KEYS.firstOrNull { it.second == m }?.first } + KEY_NAMES.getOrElse(k) { "KEY" }).joinToString(" "))
@@ -1043,7 +1076,7 @@ private fun Live(s: Session) {
                         if (mouse) {
                             // MOUSE: the pointer follows the finger, no button; not in the first 80 ms, so the first finger of
                             // a two- or three-finger tap leaves the pointer where it is
-                            if (moved || System.currentTimeMillis() - t0 > 80) { val at = toFb(p); mouseAt = at; rfb.pointer(at.first, at.second, 0) }
+                            if (moved || System.currentTimeMillis() - t0 > 80) { val at = toFb(p); mouseAt = at; rfb.pointer(at.first, at.second, held) }
                         } else if (scrollMode) {
                             // one finger in SCROLL: up and down turn the Mac's wheel
                             scrollAcc += c.positionChange().y
@@ -1069,7 +1102,7 @@ private fun Live(s: Session) {
                     val quick = System.currentTimeMillis() - t0 < 400
                     if (mouse) {
                         // MOUSE: a short tap of three fingers clicks, of two fingers right-clicks, where the pointer is
-                        if (!multi) { val to = toFb(last); mouseAt = to; rfb.pointer(to.first, to.second, if (dragHeld) 1 else 0); return@awaitEachGesture }
+                        if (!multi) { val to = toFb(last); mouseAt = to; rfb.pointer(to.first, to.second, held); return@awaitEachGesture }
                         val at = mouseAt
                         if (at != null && System.currentTimeMillis() - t0 < 400 && multiTravel < 60f) {
                             val button = if (fingers >= 3) 1 else 4
@@ -1201,8 +1234,8 @@ private fun Live(s: Session) {
         // v17: 🖱 beside ⌨ (Marko, 27.10.2026: "a keyboard icon ... and next to it there must be a mouse icon")
         Key("🖱", modifier, active = mouseMode, size = 24, padH = ROW_PAD) { setMouse(!mouseMode) }
         if (mouseMode) {
-            Key("L", Modifier.weight(0.6f), size = 18, sub = "CLICK", padH = 2) { mouseClick(1) }
-            Key("R", Modifier.weight(0.6f), size = 18, sub = "CLICK", padH = 2) { mouseClick(4) }
+            Key("L", Modifier.weight(0.6f), active = held == 1, size = 18, sub = if (held == 1) "LOCKED" else "CLICK", padH = 2, onLongClick = { toggleHold(1) }) { mouseClick(1) }
+            Key("R", Modifier.weight(0.6f), active = held == 4, size = 18, sub = if (held == 4) "LOCKED" else "CLICK", padH = 2, onLongClick = { toggleHold(4) }) { mouseClick(4) }
             Key("D", Modifier.weight(0.6f), active = dragHeld, size = 18, sub = "DRAG", padH = 2) { toggleDrag() }
         }
     }
@@ -1257,6 +1290,25 @@ private fun Live(s: Session) {
             T("DEVICES: a tap shows it on this screen", AmberDim, 12)
             Key((s.linux?.name ?: "THE MAC") + "  " + s.host.ifEmpty { "not connected" }, Modifier.fillMaxWidth(), active = s.phone == null, size = 13) {
                 s.phone = null; settingsOpen = false
+            }
+            // v24: every machine of the tailnet, one tap switches to it (the link here closes first)
+            var showOthers by remember { mutableStateOf(false) }
+            var others by remember { mutableStateOf<List<Tailnet.Place>?>(null) }
+            Key("⇄ CONNECT TO OTHER SESSION", Modifier.fillMaxWidth(), active = showOthers, size = 14) { showOthers = !showOthers }
+            if (showOthers) {
+                LaunchedEffect(Unit) {
+                    others = null
+                    others = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { s.app?.let { Tailnet.places(it, s.prefs) } ?: emptyList() }
+                }
+                val list = others
+                if (list == null) T("> Tailscale is reading your machines …", AmberDim, 12)
+                else if (list.isEmpty()) T("> no machine answers", RedAlert, 12)
+                else list.forEach { pl ->
+                    val now = s.isCurrent(pl)
+                    Key((if (pl.online) "● " else "○ ") + pl.name + "  " + pl.ip + if (now) "  (NOW)" else "", Modifier.fillMaxWidth(), active = now, size = 12) {
+                        if (!now) { settingsOpen = false; s.enter(pl) }
+                    }
+                }
             }
             var phones by remember { mutableStateOf(Phones.all(s.prefs)) }
             phones.forEach { p ->
@@ -1351,8 +1403,8 @@ private fun Live(s: Session) {
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
                 RailKey("MOUSE", null, if (mouseMode) RailState.ON else RailState.OFF) { setMouse(!mouseMode) }
                 if (mouseMode) {
-                    RailKey("L", "CLICK", RailState.OFF) { mouseClick(1) }
-                    RailKey("R", "CLICK", RailState.OFF) { mouseClick(4) }
+                    RailKey("L", if (held == 1) "LOCKED" else "CLICK", if (held == 1) RailState.ON else RailState.OFF, onLongClick = { toggleHold(1) }) { mouseClick(1) }
+                    RailKey("R", if (held == 4) "LOCKED" else "CLICK", if (held == 4) RailState.ON else RailState.OFF, onLongClick = { toggleHold(4) }) { mouseClick(4) }
                     RailKey("D", "DRAG", if (dragHeld) RailState.ON else RailState.OFF) { toggleDrag() }
                 }
                 RailKey("NEXT", "TAB", RailState.OFF) { nextTab() }
