@@ -195,6 +195,21 @@ class MainActivity : ComponentActivity() {
             Hold.session = it
         }
         setContent { App(prefs, session) }
+        // v30: the macro door (port 8841, Tailscale and adb forward only) and the debugging keeper
+        MacroDoor.attach(this, object : MacroTarget {
+            override fun live() = session.phase == Phase.LIVE && session.rfb != null
+            override fun key(keysym: Int, down: Boolean) { session.rfb?.key(keysym, down) }
+            override fun pointer(x: Int, y: Int, buttons: Int) { session.rfb?.pointer(x, y, buttons) }
+            override fun size() = session.fbW to session.fbH
+            override fun back() { onBackPressedDispatcher.onBackPressed() }
+            override fun describe() = org.json.JSONObject()
+                .put("screen", when { session.phone != null -> "phone"; session.phase == Phase.LIVE -> "remote"; session.phase == Phase.CONNECTING -> "connecting"; else -> "machines" })
+                .put("machine", session.phone?.name ?: session.linux?.name ?: if (session.phase == Phase.SETUP) "" else "MAC")
+                .put("remote_size", "${session.fbW}x${session.fbH}")
+                .put("full_screen", session.full)
+                .put("status", session.status)
+        })
+        DebugKeeper.start(this)
         // v20: nothing starts by itself; the first page is the list of machines (Marko, 2.11.2026: "I don't need auto
         // login. Remove the option completely")
     }
@@ -523,11 +538,23 @@ private fun T(text: String, color: Color = Amber, size: Int = 16, bold: Boolean 
         fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, lineHeight = (size * 1.4f).sp,
     )
 
+/** v30: a button on screen can be pressed by the macro door by its word (Press "ESC"), while it is shown. */
+@Composable
+private fun MacroButton(word: String, onClick: () -> Unit) {
+    val latest by androidx.compose.runtime.rememberUpdatedState(onClick)
+    androidx.compose.runtime.DisposableEffect(word) {
+        val f: () -> Unit = { latest() }
+        MacroDoor.buttons[word] = f
+        onDispose { MacroDoor.buttons.remove(word, f) }
+    }
+}
+
 /** A finger-sized key: amber box line, label inside, lit while active. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Key(label: String, modifier: Modifier = Modifier, active: Boolean = false, size: Int = 16, sub: String? = null, padH: Int = 10, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val view = LocalView.current
+    MacroButton(label, onClick)
     // v15 (Marko, 26.10.2026: "When I press a button, the symbol ... needs to change color to white for half a
     // second, so I know I pressed it"): every press lights the symbol white for PRESS_FLASH_MS
     var flash by remember { mutableStateOf(0) }
@@ -651,6 +678,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
 /** v20: one machine, one button: its name, and under it what it is and its Tailscale address. */
 @Composable
 private fun Machine(pl: Tailnet.Place, busy: Boolean, onClick: () -> Unit) {
+    MacroButton(pl.name, onClick)
     val ink = if (pl.online) Amber else AmberDim
     Row(
         Modifier.fillMaxWidth().heightIn(min = 72.dp).background(BgRaised).border(1.dp, if (pl.online) AmberGlow else Rule)
@@ -1596,6 +1624,7 @@ private enum class RailState(val color: Color) {
 @Composable
 private fun ColumnScope.RailKey(word: String, whisper: String?, state: RailState, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val view = LocalView.current
+    MacroButton(word, onClick)
     var flash by remember { mutableStateOf(0) }
     LaunchedEffect(flash) { if (flash > 0) { kotlinx.coroutines.delay(PRESS_FLASH_MS); flash = 0 } }
     val lit = flash > 0
