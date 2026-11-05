@@ -1,4 +1,22 @@
-# TAKEOVER: Mantra Remote VNC (Android), state 27.10.2026, v17 (named Mantra Remote until v16)
+# TAKEOVER: Mantra Remote VNC (Android)
+
+**State 5.11.2026, v33 (GitHub release, installed on the Pixel 7 and the Nothing Phone 2a):**
+- Row 1 (and the full-screen rail on the VM): ⌘TAB replaced by a pure ⌘; on the VM it taps Super alone = the VM dock (v28).
+- Machines list: the Pixel 7 and the Nothing Phone know each other from the start (v29); tested Nothing → VM, Nothing →
+  Pixel 7, Pixel 7 → Nothing (5.11.2026). Tailscale is no longer switched off when the app closes (v32).
+- The macro door (v30, protocol of MANTRA_MANIFEST remote-door.md since v33): port 8841, `/health`, `/api`,
+  `/api/state`, `POST /api/run` (Macro Recorder language + Press "WORD" + Back), `/api/shot?w=360`; X-Mantra-Token
+  from Tailscale (= ~/.config/mantra-door.token), none via adb forward. Code: MacroDoor.kt. Client: tools/mremote.py
+  (`mremote` on the PATH), saved macros in macros/.
+- Keep debugging (v30, DebugKeeper.kt): KeeperService watches USB and wireless debugging and switches them back on
+  (WRITE_SECURE_SETTINGS, granted by `mremote keep <phone>`, which also hands over the token); restores adb on 5555
+  through its own wireless debugging after a reboot; without the permission, a notification opens Developer options.
+  Android 17 (Pixel) hides adb_enabled from apps (reads 0 while on): the keeper just writes 1 again, harmless.
+- Not yet seen: a real reboot of either phone with the keeper (5555 restore path untested).
+
+---
+
+(history below: state 27.10.2026, v17, named Mantra Remote until v16)
 
 **What it is.** An Android app (Kotlin + Compose, `android/`, package `com.mantra.remote`) that controls Marko's Mac from his
 Nothing Phone 2a over the internet. Tailscale carries it (Mac 100.79.251.19, phone 100.67.149.40); the Mac side is Apple
