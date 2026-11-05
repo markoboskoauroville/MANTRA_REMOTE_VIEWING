@@ -67,8 +67,17 @@ object MacroDoor {
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var started = false
 
+    @Volatile private var app: android.content.Context? = null
+
     fun attach(a: Activity, t: MacroTarget) {
         activity = WeakReference(a); target = t
+        open(a.applicationContext)
+    }
+
+    /** The door itself; Press, Back and /shot need the app's window, /state answers without it. */
+    @Synchronized
+    fun open(c: android.content.Context) {
+        app = c.applicationContext
         if (started) return
         started = true
         thread(name = "macro-door", isDaemon = true) {
@@ -123,7 +132,8 @@ object MacroDoor {
     fun state(): JSONObject = (target?.describe() ?: JSONObject()).apply {
         put("version", BuildConfig.VERSION_NAME)
         put("buttons", JSONArray(buttons.keys.sorted()))
-        put("debug", DebugKeeper.status(activity.get() ?: return@apply))
+        put("window", activity.get() != null)
+        put("debug", DebugKeeper.status(app ?: return@apply))
     }
 
     private fun onMain(block: () -> Unit) {

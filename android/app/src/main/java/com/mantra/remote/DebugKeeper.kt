@@ -41,7 +41,9 @@ object DebugKeeper {
     @Volatile var last = ""; private set
 
     fun canWrite(c: Context) = c.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == PackageManager.PERMISSION_GRANTED
-    private fun get(c: Context, k: String) = Settings.Global.getInt(c.contentResolver, k, 0) == 1
+    /** On, unless the phone says plainly 0. v31: Android 17 hides adb_enabled from apps (read as missing while adb
+     *  works), so missing counts as on and only a real 0 is switched back. */
+    private fun get(c: Context, k: String) = Settings.Global.getInt(c.contentResolver, k, -1) != 0
 
     fun port5555(): Boolean = runCatching {
         java.net.Socket().use { it.connect(java.net.InetSocketAddress("127.0.0.1", 5555), 800) }; true
@@ -122,6 +124,7 @@ class KeeperService : Service() {
         contentResolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ADB_ENABLED), false, watcher)
         contentResolver.registerContentObserver(Settings.Global.getUriFor("adb_wifi_enabled"), false, watcher)
         h.post(tick)
+        MacroDoor.open(this)      // v31: the door from the start of the phone, not only once the app was opened
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_STICKY
