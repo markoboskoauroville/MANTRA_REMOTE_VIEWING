@@ -53,6 +53,7 @@ object DebugKeeper {
         .put("usb_debugging", get(c, Settings.Global.ADB_ENABLED))
         .put("wireless_debugging", get(c, WIFI))
         .put("tcp_5555", port5555())
+        .put("tailscale", tailscaleUp())
         .put("can_write_settings", canWrite(c))
         .put("last", last)
 
@@ -69,8 +70,14 @@ object DebugKeeper {
         } else if (!usb || !wifi) {
             remind(c); return@thread
         }
+        // v34: Tailscale back after a restart (also set as the always-on VPN by mremote keep)
+        if (!tailscaleUp()) runCatching { Tailscale.on(c) }
         if (!port5555()) restore5555(c)
     }
+
+    fun tailscaleUp(): Boolean = runCatching {
+        java.net.NetworkInterface.getNetworkInterfaces().toList().any { i -> i.isUp && i.inetAddresses.toList().any { it.hostAddress?.startsWith("100.") == true } }
+    }.getOrDefault(false)
 
     /** `adb tcpip 5555` asked of the phone itself, through its own wireless debugging. */
     private fun restore5555(c: Context) {

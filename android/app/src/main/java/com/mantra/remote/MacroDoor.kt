@@ -273,6 +273,15 @@ object MacroDoor {
                 onMain(f); Thread.sleep(150)
             }
             "back" -> { onMain { target?.back() }; Thread.sleep(150) }
+            // v34: pairs this app with the phone's own wireless debugging (the six digits and the port of "Pair device
+            // with pairing code"), once; afterwards the keeper can bring adb on 5555 back by itself after a restart.
+            // mremote pairself <phone> reads both from the dialog over USB and sends this line.
+            "pairadb" -> {
+                val port = num(a[0], "PairAdb port"); val code = a.getOrElse(1) { "" }
+                val ok = com.mantra.remote.adb.AdbManager(app ?: throw Stop("no app")).let { m -> try { m.pair("127.0.0.1", port, code) } finally { runCatching { m.close() } } }
+                if (!ok) throw Stop("pairing refused")
+                app?.let { DebugKeeper.check(it) }
+            }
             "log" -> {}
             else -> throw Stop("unknown command \"$cmd\"")
         }
