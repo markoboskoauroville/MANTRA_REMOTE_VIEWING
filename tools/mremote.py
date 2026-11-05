@@ -88,8 +88,15 @@ def _adb(serial, *args, **kw):
 def _screen(serial):
     """The screen's texts with their centres, from uiautomator."""
     import re
-    _adb(serial, "shell", "uiautomator", "dump", "/sdcard/u.xml")
-    xml = _adb(serial, "shell", "cat", "/sdcard/u.xml")
+    import time
+    xml = ""
+    for _ in range(4):           # a fresh dump each time; "null root node" leaves nothing, so try again
+        _adb(serial, "shell", "rm", "-f", "/sdcard/u.xml")
+        _adb(serial, "shell", "uiautomator", "dump", "/sdcard/u.xml")
+        xml = _adb(serial, "shell", "cat", "/sdcard/u.xml")
+        if "<hierarchy" in xml:
+            break
+        time.sleep(1)
     out = []
     for m in re.finditer(r'text="([^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml):
         t, x1, y1, x2, y2 = m.group(1), *map(int, m.groups()[1:])
@@ -100,11 +107,14 @@ def _screen(serial):
 
 def _tap_text(serial, want, scrolls=12):
     import time
+    for _ in range(4):           # from the top of the list
+        _adb(serial, "shell", "input", "swipe", "540", "700", "540", "2000", "200")
+    time.sleep(0.8)
     for _ in range(scrolls):
         for t, x, y in _screen(serial):
             if t.lower() == want.lower():
                 _adb(serial, "shell", "input", "tap", str(x), str(y)); time.sleep(1.5); return True
-        _adb(serial, "shell", "input", "swipe", "540", "1700", "540", "700", "300"); time.sleep(0.8)
+        _adb(serial, "shell", "input", "swipe", "540", "1700", "540", "1000", "400"); time.sleep(1)
     return False
 
 

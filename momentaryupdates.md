@@ -217,3 +217,5 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 **Status:** saved first.
 
 **Status (5.11.2026, 13:00):** v30–v33: MacroDoor (Macro Recorder language, POST /api/run, token), tools/mremote.py, macros/vm_dock.ahk; manifest module one-command-many-actions.md. Keep debugging: DebugKeeper (switches back on within seconds, tested on the Pixel), adb 5555 restore after reboot not yet seen.
+
+**Status (5.11.2026, 14:30):** after a real restart of both phones: Tailscale is now the always-on VPN (and the keeper reconnects it), the app paired once with each phone's own wireless debugging (Pixel by sight: its Settings cannot be read by uiautomator on Android 17; Nothing by mremote pairself), and the keeper restored adb 5555 by itself on both. The Pixel has no screen lock (Marko chose None).
