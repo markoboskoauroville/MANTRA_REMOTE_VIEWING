@@ -149,7 +149,7 @@ private fun helpText(label: String): String {
         l == "⏎" -> "Return: confirms, sends, a new line."
         l == "⌫" -> "Delete: removes the letter before the cursor."
         l == "←" || l == "→" || l == "↑" || l == "↓" -> "The arrow key, as on the Mac's keyboard."
-        l == "FIT" || l == "FITTED" -> "Linux machine only: FIT asks the machine to take the size of the phone's picture, so Chrome fills the phone upright. Lit, it is fitted; a tap gives the machine its old size back (leaving the machine does that too)."
+        l == "FIT" || l == "FITTED" -> "Linux machine only: FIT fills the phone with the picture, its shape kept, the machine's own size untouched. One finger drags across the picture, a tap clicks, a long press drags with the button. Tap again for the whole picture."
         l == "CONNECT" -> "Switches Tailscale on, finds the Mac by itself (home Wi-Fi or Tailscale, the first that answers) and logs in with the user and password above. The app does this by itself when it opens."
         else -> label
     }
@@ -744,9 +744,9 @@ private val FPS = listOf("0.2" to 5000L, "0.5" to 2000L, "1" to 1000L, "2" to 50
 // X11 keysyms as RFB wants them. Apple's server reads Super as Command and Alt as Option.
 private const val K_CMD = 0xffeb
 // symbol, keysym, the name written under it; in the MacBook Pro's order (K_* below are compile-time constants)
-private val MOD_KEYS by lazy { listOf(Triple("⌃", K_CTRL, "control"), Triple("⌥", K_OPT, "option"), Triple("⌘", K_CMD, "command"), Triple("⇧", K_SHIFT, "shift")) }
+private val MOD_KEYS by lazy { listOf(Triple("⌃", K_CTRL, "control"), Triple("⌥", K_OPT, "option"), Triple("⌘", K_CMD, "command")) }
 // v21: a Linux machine has no Command; Alt is Option's keysym
-private val LINUX_MOD_KEYS by lazy { listOf(Triple("⌃", K_CTRL, "ctrl"), Triple("⌥", K_OPT, "alt"), Triple("⇧", K_SHIFT, "shift")) }
+private val LINUX_MOD_KEYS by lazy { listOf(Triple("⌃", K_CTRL, "ctrl"), Triple("⌥", K_OPT, "alt")) }
 private const val K_OPT = 0xffe9
 private const val K_CTRL = 0xffe3
 private const val K_SHIFT = 0xffe1
@@ -790,6 +790,10 @@ private fun Live(s: Session) {
         s.dial(c)
     }
     var zoom by remember { mutableStateOf(1f) }
+    // v26 FIT (Marko, 5.11.2026: "It's big automatically. But enable finger tap holding on the screen ... going through
+    // this picture, which is bigger than the screen"): the picture fills the phone, its aspect kept, the machine keeps
+    // its own size; one finger drags the picture, a tap clicks, a long press drags with the button
+    var fitView by remember { mutableStateOf(false) }
     var pan by remember { mutableStateOf(Offset.Zero) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     var scrollMode by remember { mutableStateOf(false) }
@@ -857,12 +861,17 @@ private fun Live(s: Session) {
         val y = rect[1] + ((p.y - baseY() - pan.y) / scale())
         return x.roundToInt().coerceIn(rect[0], rect[0] + rect[2] - 1) to y.roundToInt().coerceIn(rect[1], rect[1] + rect[3] - 1)
     }
+    // v26: the picture never leaves an empty edge where it is larger than the view, and stays centred where it is smaller
     fun clampPan(p: Offset): Offset {
-        val maxX = (rect[2] * scale() - rect[2] * fit()).coerceAtLeast(0f)
-        val maxY = (rect[3] * scale() - rect[3] * fit()).coerceAtLeast(0f)
-        // zoom grows around the origin of the fitted picture; pan may move it back by up to the extra size
-        return Offset(p.x.coerceIn(-maxX, 0f), p.y.coerceIn(-maxY, 0f))
+        val w = rect[2] * scale(); val h = rect[3] * scale()
+        fun axis(v: Float, size: Float, view: Int, base: Float) =
+            if (size <= view) (view - size) / 2f - base else v.coerceIn(view - size - base, -base)
+        return Offset(axis(p.x, w, viewSize.width, baseX()), axis(p.y, h, viewSize.height, baseY()))
     }
+    fun coverZoom(): Float = if (viewSize.width > 0 && rect[2] > 0)
+        maxOf(viewSize.width / rect[2].toFloat(), viewSize.height / rect[3].toFloat()) / fit() else 1f
+    // v26: FIT follows a new picture size and the view (turned sideways, rows shown or hidden), after the reset above
+    LaunchedEffect(rfb, monitor, s.fbW, s.fbH, viewSize) { if (fitView) { zoom = coverZoom(); pan = clampPan(Offset(0f, -10000f)) } }
     fun withMods(block: () -> Unit) {
         val m = mods.value
         m.forEach { rfb.key(it, true) }
@@ -1108,6 +1117,8 @@ private fun Live(s: Session) {
                                 rfb.pointer(fx, fy, button); rfb.pointer(fx, fy, 0)
                                 scrollAcc -= 40f * kotlin.math.sign(scrollAcc)
                             }
+                        } else if (lx && fitView && !dragging && moved) {
+                            pan = clampPan(pan + c.positionChange())   // v26 FIT: the finger moves the picture
                         } else if (!dragging && !moved && System.currentTimeMillis() - t0 > 450) {
                             // a long press: the button goes down and the finger drags
                             dragging = true
@@ -1202,6 +1213,17 @@ private fun Live(s: Session) {
     }
     // the meter on the screen, or only in ⚙ (Marko, 26.10.2026: "I can disable this speed status line")
     var showMeter by remember { mutableStateOf(s.prefs?.getBoolean("meter_on", true) ?: true) }
+    // v26 ⌘TAB: the app switcher. Mac: ⌘ held, Tab, ⌘ let go (the last app; with ⌘ already on, one more Tab).
+    // Linux machine: Super+Tab, the VM's own switcher (the Mac viewer sends the same for ⌘Tab).
+    fun cmdTab() {
+        travelling("⌘ TAB")
+        when {
+            lx -> { rfb.key(K_CMD, true); rfb.key(K_TAB, true); rfb.key(K_TAB, false); rfb.key(K_CMD, false) }
+            cmdHeld -> { rfb.key(K_TAB, true); rfb.key(K_TAB, false) }
+            else -> { rfb.key(K_CMD, true); rfb.key(K_TAB, true); rfb.key(K_TAB, false); rfb.key(K_CMD, false) }
+        }
+        rfb.probe()
+    }
     var settingsOpen by remember { mutableStateOf(false) }
     // v17: each of the three rows can be switched off in ⚙ (Marko, 27.10.2026: "In settings I can disable all the rows")
     var rowKeys by remember { mutableStateOf(s.prefs?.getBoolean(ROW_KEYS, true) ?: true) }
@@ -1213,14 +1235,18 @@ private fun Live(s: Session) {
             Key(label, Modifier.width(56.dp), active = modOn(k), size = 20, sub = name) { toggleMod(k) }
         }
     }
-    val specialKeys = listOf("ESC" to K_ESC, "TAB" to K_TAB, "⏎" to K_RETURN, "⌫" to K_BACKSPACE,
+    // v26 (Marko, 5.11.2026: "Escape should be the first button on the left side, and then Control Alt Shift ... Remove
+    // Shift", "a dedicated button which will be Command Tab to switch between applications")
+    val specialKeys = listOf("TAB" to K_TAB, "⏎" to K_RETURN, "⌫" to K_BACKSPACE,
         "←" to K_LEFT, "↑" to K_UP, "↓" to K_DOWN, "→" to K_RIGHT)
     val keysRow: @Composable () -> Unit = {
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            Key("ESC", Modifier.width(60.dp), size = 18, padH = 10) { tapKey(K_ESC) }
             modKeys()
+            Key("⌘TAB", Modifier.width(76.dp), size = 16, padH = 6) { cmdTab() }
             // ⏎ in a narrow frame, so the whole first row stands inside the phone's 413 dp, ⏎ included (Marko, 26.10.2026)
             specialKeys.forEach { (label, k) -> Key(label, Modifier.width(if (k == K_RETURN) 36.dp else 60.dp), size = 18, padH = if (k == K_RETURN) 2 else 10) { tapKey(k) } }
         }
@@ -1267,13 +1293,10 @@ private fun Live(s: Session) {
     // v21 FIT: the Linux machine takes the size of the phone's picture, in dp (Chrome at its own scale, upright);
     // the second tap, or leaving, gives it its old size back
     fun fitVm() {
-        val from = s.fitFrom
-        if (!rfb.canResize) { travelling("FIT: THE MACHINE CANNOT RESIZE"); return }
-        if (from != null) { s.fitFrom = null; travelling("SIZE ${from.first}x${from.second}", picture = true); rfb.setDesktopSize(from.first, from.second); rfb.probe(); return }
-        val w = (viewSize.width / density).roundToInt() and 1.inv(); val h = (viewSize.height / density).roundToInt() and 1.inv()
-        if (w < 200 || h < 150) return
-        s.fitFrom = s.fbW to s.fbH
-        travelling("FIT ${w}x$h", picture = true); rfb.setDesktopSize(w, h); rfb.probe()
+        fitView = !fitView
+        zoom = if (fitView) coverZoom() else 1f
+        pan = clampPan(Offset(0f, -10000f))     // the top of the picture first
+        travelling(if (fitView) "FIT" else "WHOLE PICTURE", picture = true)
     }
     val views: @Composable RowScope.() -> Unit = {
         // LANDSCAPE left the row (Marko, 25.10.2026: "more space for the letters"); FULL SCREEN is the sideways view.
@@ -1283,7 +1306,7 @@ private fun Live(s: Session) {
         Key("⛶", Modifier.weight(0.6f), active = true, size = 22, padH = ROW_PAD) { s.full = true }
         Key("VIEW", Modifier.weight(1f), active = viewOnly, size = 14, padH = ROW_PAD) { viewOnly = !viewOnly; if (viewOnly) mouseMode = false }   // lit = view only (Marko, 26.10.2026)
         Key("⇥", Modifier.weight(0.6f), size = 22, padH = ROW_PAD) { nextTab() }
-        if (lx) Key(if (s.fitFrom != null) "FITTED" else "FIT", Modifier.weight(1f), active = s.fitFrom != null, size = 14, padH = ROW_PAD) { fitVm() }
+        if (lx) Key("FIT", Modifier.weight(1f), active = fitView, size = 14, padH = ROW_PAD) { fitVm() }
         else {
             Key("⇄", Modifier.weight(0.7f), size = 22, sub = if (monitor == 0) "BENQ" else "MACBOOK", padH = 2) { monitor = 1 - monitor }
             Key("DOCK", Modifier.weight(1f), size = 14, padH = ROW_PAD, onLongClick = { dock() }) { dockHiding() }
@@ -1420,7 +1443,7 @@ private fun Live(s: Session) {
             Column(Modifier.width(76.dp).fillMaxHeight()) {
                 // v18: one key toggles the monitors, its label the one on screen (Marko, 2.11.2026: "I need only one
                 // button which toggles the monitors"); with more than two it steps to the next
-                if (lx) RailKey("FIT", null, if (s.fitFrom != null) RailState.ON else RailState.OFF) { fitVm() }
+                if (lx) RailKey("FIT", null, if (fitView) RailState.ON else RailState.OFF) { fitVm() }
                 else RailKey("MON ${monitor + 1}", MONITORS[monitor].name.substringAfter(' '), RailState.ON) { monitor = (monitor + 1) % MONITORS.size }
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
                 RailKey("MOUSE", null, if (mouseMode) RailState.ON else RailState.OFF) { setMouse(!mouseMode) }

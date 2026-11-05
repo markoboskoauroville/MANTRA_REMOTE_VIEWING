@@ -156,3 +156,6 @@ wiped by the uninstall one ENTER gave six "LOGIN REFUSED" in 38 s: `onClosed` re
 login (and REFUSED / NO VNC PASSWORD / NOT A VNC SERVER) stops: no redial, the service stops, SETTINGS opens with
 "CHECK THE … PASSWORD". ENTER on the Mac with no password saved dials nothing and opens SETTINGS.
 Still to test on the phone (needs Marko's passwords typed in SETTINGS): picture, L/R lock, CONNECT TO OTHER SESSION.
+
+## v26 (5.11.2026)
+Top row: ESC first, then ctrl and alt (shift removed; the keyboard has its own), then ⌘TAB (Mac: ⌘+Tab; Linux machine: Super+Tab, the VM's switcher). FIT on a Linux machine no longer resizes the machine: the picture fills the phone with its aspect kept, one finger drags across it, a tap clicks, a long press drags with the button. Pan is clamped so no empty edge shows.
