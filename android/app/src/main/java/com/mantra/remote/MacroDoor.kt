@@ -43,9 +43,10 @@ import kotlin.concurrent.thread
  * (Super on the VM). Click/Send need an open VNC session; Press works on every screen.
  *
  * The door: HTTP on port 8841, answered only from Tailscale (100.64.0.0/10) and this phone itself (adb forward):
- *     GET  /state            what is on screen, the machine, the remote size, every button's word
- *     POST /run              the body is a script; the answer: ok, every line done, the error, the time
- *     GET  /shot?w=360       the app's screen as a small PNG (one look instead of many)
+ *     GET  /health, GET /api  the manifest's door (modules/remote-door.md); X-Mantra-Token from Tailscale
+ *     GET  /api/state        what is on screen, the machine, the remote size, every button's word
+ *     POST /api/run          the body is a script; the answer: ok, every line done, the error, the time
+ *     GET  /api/shot?w=360   the app's screen as a small PNG (one look instead of many)
  * The Python side is tools/mremote.py.
  */
 interface MacroTarget {
@@ -115,14 +116,35 @@ object MacroDoor {
         val body = ByteArray(len).also { var n = 0; while (n < len) { val r = inp.read(it, n, len - n); if (r < 0) break; n += r } }
         val route = path.substringBefore('?')
         val query = path.substringAfter('?', "").split('&').mapNotNull { p -> p.split('=').takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap()
+        // v33: the manifest's door (modules/remote-door.md): X-Mantra-Token on every request from Tailscale (the same token
+        // as the Mac's Mantra Door, put into the app by `mremote keep`); this phone itself (adb forward) needs none
+        if (!c.inetAddress.isLoopbackAddress) {
+            val sent = lines.firstOrNull { it.lowercase().startsWith("x-mantra-token:") }?.substringAfter(':')?.trim() ?: ""
+            val mine = token()
+            if (mine.isEmpty() || sent != mine) { reply(out, 401, "application/json", """{"ok": false, "error": "token missing or wrong: run mremote keep"}""".toByteArray()); return }
+        }
+        val r = route.removePrefix("/api").ifEmpty { "/api" }
         when {
-            route == "/state" -> reply(out, 200, "application/json", state().toString(1).toByteArray())
-            route == "/run" && method == "POST" -> reply(out, 200, "application/json", run(String(body)).toString(1).toByteArray())
-            route == "/shot" -> shot(query["w"]?.toIntOrNull() ?: 360)?.let { reply(out, 200, "image/png", it) }
+            route == "/health" -> reply(out, 200, "application/json", JSONObject().put("app", "mantra-remote").put("name", "Mantra Remote VNC")
+                .put("version", BuildConfig.VERSION_NAME.toIntOrNull() ?: 0).put("pid", android.os.Process.myPid()).toString().toByteArray())
+            route == "/api" -> reply(out, 200, "application/json", JSONObject().put("app", "mantra-remote").put("version", BuildConfig.VERSION_NAME)
+                .put("actions", JSONArray()
+                    .put(JSONObject().put("name", "run").put("does", "runs a macro (Macro Recorder language), many actions in one call").put("args", JSONObject().put("script", "text")))
+                    .put(JSONObject().put("name", "state").put("does", "what is on screen, the buttons, the debugging switches").put("args", JSONObject()))
+                    .put(JSONObject().put("name", "shot").put("does", "the app's screen as a small PNG").put("args", JSONObject().put("w", "int")))).toString(1).toByteArray())
+            r == "/state" -> reply(out, 200, "application/json", state().toString(1).toByteArray())
+            r == "/run" && method == "POST" -> {
+                val text = String(body).let { b -> if (b.trimStart().startsWith("{")) runCatching { JSONObject(b).getString("script") }.getOrDefault(b) else b }
+                reply(out, 200, "application/json", run(text).toString(1).toByteArray())
+            }
+            r == "/shot" -> shot(query["w"]?.toIntOrNull() ?: 360)?.let { reply(out, 200, "image/png", it) }
                 ?: reply(out, 500, "text/plain", "no picture".toByteArray())
-            else -> reply(out, 404, "text/plain", "GET /state, POST /run, GET /shot?w=360".toByteArray())
+            else -> reply(out, 404, "text/plain", "GET /health, GET /api, GET /api/state, POST /api/run, GET /api/shot?w=360".toByteArray())
         }
     }
+
+    /** The door's token: files/door.token, put there by `mremote keep` (run-as); never shown, never logged. */
+    private fun token(): String = runCatching { java.io.File(app!!.filesDir, "door.token").readText().trim() }.getOrDefault("")
 
     private fun reply(out: java.io.OutputStream, code: Int, type: String, data: ByteArray) {
         out.write("HTTP/1.1 $code OK\r\nContent-Type: $type\r\nContent-Length: ${data.size}\r\nConnection: close\r\n\r\n".toByteArray())

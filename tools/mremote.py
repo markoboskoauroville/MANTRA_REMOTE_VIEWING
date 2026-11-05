@@ -20,28 +20,37 @@ import json, os, subprocess, sys, urllib.request
 PHONES = {"pixel": "100.70.23.53", "nothing": "100.67.149.40"}
 PORT = 8841
 PKG = "com.mantra.remote"
+TOKEN_FILE = os.path.expanduser("~/.config/mantra-door.token")   # the Mac's Mantra Door token (modules/remote-door.md)
+
+
+def _token():
+    try:
+        return open(TOKEN_FILE).read().strip()
+    except OSError:
+        return ""
 
 
 class Remote:
     def __init__(self, phone="pixel"):
         self.host = PHONES.get(phone, phone)
 
-    def _get(self, path, timeout=20):
-        with urllib.request.urlopen(f"http://{self.host}:{PORT}{path}", timeout=timeout) as r:
+    def _req(self, path, data=None, timeout=20):
+        req = urllib.request.Request(f"http://{self.host}:{PORT}{path}", data=data, method="POST" if data else "GET",
+                                     headers={"X-Mantra-Token": _token()})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.read()
 
+    _get = _req
+
     def state(self):
-        return json.loads(self._get("/state"))
+        return json.loads(self._get("/api/state"))
 
     def run(self, *lines):
         """Every line in one request; the answer says ok, what was done, the error and the time."""
-        body = "\n".join(lines).encode()
-        req = urllib.request.Request(f"http://{self.host}:{PORT}/run", data=body, method="POST")
-        with urllib.request.urlopen(req, timeout=600) as r:
-            return json.loads(r.read())
+        return json.loads(self._req("/api/run", "\n".join(lines).encode(), timeout=600))
 
     def shot(self, out="/tmp/mremote.png", width=360):
-        open(out, "wb").write(self._get(f"/shot?w={width}"))
+        open(out, "wb").write(self._get(f"/api/shot?w={width}"))
         return out
 
 
@@ -51,8 +60,11 @@ def keep(phone):
         r = subprocess.run(["adb", "-s", target, "shell", "pm", "grant", PKG, "android.permission.WRITE_SECURE_SETTINGS"],
                            capture_output=True, text=True)
         if r.returncode == 0:
-            subprocess.run(["adb", "-s", target, "shell", "am", "start-foreground-service", "-n", f"{PKG}/.KeeperService"],
-                           capture_output=True)
+            # the door's token into the app's own files (debuggable build: run-as), through stdin, never on a command line
+            tok = _token()
+            if tok:
+                subprocess.run(["adb", "-s", target, "shell", "run-as", PKG, "sh", "-c", "'cat > files/door.token'"],
+                               input=tok, text=True, capture_output=True)
             print(f"{phone}: the app may now keep debugging on (via {target})")
             return 0
     print(f"{phone}: adb cannot reach it (USB or {PHONES.get(phone, phone)}:5555): {r.stderr.strip()}")
