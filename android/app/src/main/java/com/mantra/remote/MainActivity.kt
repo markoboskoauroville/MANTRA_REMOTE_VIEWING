@@ -134,7 +134,7 @@ private fun helpText(label: String): String {
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
-        l == "⚙" -> "Settings: the numbers of the status line with their meaning, the frames per second, the colours, the status line at the top on or off, the three rows of keys on or off (with all three off, ⚙ stays see-through over the picture), and ✕ QUIT APP, which closes the link, switches Tailscale off and quits the app."
+        l == "⚙" -> "Settings: the numbers of the status line with their meaning, the frames per second, the colours, the status line at the top on or off, the three rows of keys on or off (with all three off, ⚙ stays see-through over the picture), and ✕ QUIT APP, which closes the link and quits the app (Tailscale stays on)."
         l == "☰" -> "MENU: the keys below become the Mac's menu bar keys. The menu bar of the app in front opens (even when it hides itself); ← → go from menu to menu, ↑ ↓ through the items, ⏎ CHOOSE picks, ☰ OPEN opens it again, ✕ EXIT closes the menus and brings your keys back."
         l == "⇄" -> "Switches the picture between the two screens: the BenQ and the MacBook Pro. The small word under it is the screen you are watching now."
         l.contains("FULL") || l == "⛶" -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
@@ -176,7 +176,9 @@ private object Hold {
 }
 
 /** The app closed (Back, or swiped away from the recent apps): the link and Tailscale go off. */
-internal fun closeApp() { Hold.session?.let { it.hangUp(); it.app?.let { a -> Tailscale.off(a) } } }
+// v32: Tailscale stays on when the app closes (Marko, 5.11.2026: the Pixel 7 "can be viewed from all machines"; a phone
+// that switches Tailscale off is unreachable for adb, the macro door and the other phone)
+internal fun closeApp() { Hold.session?.hangUp() }
 
 private const val MAX_REDIALS = 5
 
@@ -646,7 +648,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
                 T("MANTRA REMOTE VNC ▊", Amber, 26, bold = true)
                 T("v" + BuildConfig.VERSION_NAME + "  ·  tap for the latest version", AmberDim, 13)
             }
-            Key("✕", Modifier.width(60.dp), size = 22) { activity?.finish() }   // closes the app: link, service, Tailscale off
+            Key("✕", Modifier.width(60.dp), size = 22) { activity?.finish() }   // closes the app: link, service (Tailscale stays on, v32)
         }
         T("── MY MACHINES ─────────────────", Rule, 16)
         val list = online
