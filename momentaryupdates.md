@@ -197,3 +197,7 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 "a real Pixel 7 is ready. Please, can you check if it's working" (Marko, 2.11.2026)
 
 "please add the feature where when the user clicks at the top of the application, it comes to the GitHub page to download the latest version" / "only from the login screen, not inside the remote session" (Marko, 2.11.2026)
+
+## 5.11.2026
+
+"Change my Swift app because I want that this password is only read from this setting dialog, not connected to any text file on my computer. Also remove from my Android application the remote control fit. I don't know what this button does. Actually, it's just enlarging the screen on the virtual machine, which is not necessary if I want to see one by one resolution. Fit can stay, but I cannot pan and scan through the image. When I say fit, it's good. It's big automatically. But enable finger tap holding on the screen or mouse holding on the screen and going through this picture, which is bigger than the screen. Look how this fit mode looks in my Mac OS remote control application. It's stretched. Please don't make it stretched. Make it a normal aspect ratio."
