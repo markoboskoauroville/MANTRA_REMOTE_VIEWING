@@ -1213,16 +1213,12 @@ private fun Live(s: Session) {
     }
     // the meter on the screen, or only in ⚙ (Marko, 26.10.2026: "I can disable this speed status line")
     var showMeter by remember { mutableStateOf(s.prefs?.getBoolean("meter_on", true) ?: true) }
-    // v26 ⌘TAB: the app switcher. Mac: ⌘ held, Tab, ⌘ let go (the last app; with ⌘ already on, one more Tab).
-    // Linux machine: Super+Tab, the VM's own switcher (the Mac viewer sends the same for ⌘Tab).
-    fun cmdTab() {
-        travelling("⌘ TAB")
-        when {
-            lx -> { rfb.key(K_CMD, true); rfb.key(K_TAB, true); rfb.key(K_TAB, false); rfb.key(K_CMD, false) }
-            cmdHeld -> { rfb.key(K_TAB, true); rfb.key(K_TAB, false) }
-            else -> { rfb.key(K_CMD, true); rfb.key(K_TAB, true); rfb.key(K_TAB, false); rfb.key(K_CMD, false) }
-        }
-        rfb.probe()
+    // v28 the pure ⌘ on the Linux machine: Super pressed and let go alone, which opens the VM's dock (chromium-vm-dock
+    // watches for a lone Super_L, the same as the Mac viewer's lone ⌘)
+    fun cmdAlone() {
+        mods.value = emptySet()
+        travelling("⌘")
+        rfb.key(K_CMD, true); rfb.key(K_CMD, false); rfb.probe()
     }
     var settingsOpen by remember { mutableStateOf(false) }
     // v17: each of the three rows can be switched off in ⚙ (Marko, 27.10.2026: "In settings I can disable all the rows")
@@ -1246,7 +1242,9 @@ private fun Live(s: Session) {
         ) {
             Key("ESC", Modifier.width(60.dp), size = 18, padH = 10) { tapKey(K_ESC) }
             modKeys()
-            Key("⌘TAB", Modifier.width(76.dp), size = 16, padH = 6) { cmdTab() }
+            // v28 (Marko, 5.11.2026: "on action row at the top i need to have command only, pure command button"):
+            // ⌘TAB is gone; the Mac has its ⌘ toggle in modKeys, the Linux machine gets a pure ⌘ (Super alone = its dock)
+            if (lx) Key("⌘", Modifier.width(56.dp), size = 20, sub = "command") { cmdAlone() }
             // ⏎ in a narrow frame, so the whole first row stands inside the phone's 413 dp, ⏎ included (Marko, 26.10.2026)
             specialKeys.forEach { (label, k) -> Key(label, Modifier.width(if (k == K_RETURN) 36.dp else 60.dp), size = 18, padH = if (k == K_RETURN) 2 else 10) { tapKey(k) } }
         }
@@ -1430,6 +1428,7 @@ private fun Live(s: Session) {
                 modList.forEach { (label, k, name) ->
                     RailKey(label, name, if (k == K_CMD && cmdHeld) RailState.ON else if (modOn(k)) RailState.ARMED else RailState.OFF) { toggleMod(k) }
                 }
+                if (lx) RailKey("⌘", "command", RailState.OFF) { cmdAlone() }
                 RailKey("ESC", null, RailState.OFF) { tapKey(K_ESC) }
                 RailKey("TAB", null, RailState.OFF) { tapKey(K_TAB) }
                 RailKey("⏎", null, RailState.OFF) { tapKey(K_RETURN) }

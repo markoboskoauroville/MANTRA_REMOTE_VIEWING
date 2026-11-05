@@ -205,3 +205,4 @@ explained, FPS and colours, ✕ QUIT APP; C8 narrower; titles centred.
 ## 5.11.2026 (afternoon), Marko (mac os session)
 "the bug remote control app cannot connect to pixel and also pixel park has different commands action buttons and on action row at the top i need to have command only, pure command button"
 **Status:** saved first.
+**Status (5.11.2026, ~12:30):** the Pixel had v25 (other signing key, could not update to v26/v27) and no VM password: uninstalled, v27 installed, password saved. The VM Xvnc had blacklisted the Pixel address after failed logins. v28: Row 1 ⌘TAB replaced by a pure ⌘ (VM: Super alone opens the dock; Mac: its ⌘ toggle), also on the full-screen rail for the VM.

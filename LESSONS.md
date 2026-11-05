@@ -52,3 +52,10 @@
   needs USB debugging (or a USB mode with ADB) chosen on the phone.
 - **(1.11.2026) Releasing a Twilio number throws away the paid rest of its month** (no refund, no way back). Keep a
   number until just before its next charge, and ask Marko before releasing. See `docs/TWILIO.md`.
+
+## 5.11.2026: the Pixel 7 stayed on v25
+v26 and v27 are signed by the GitHub build with the saved key; the Pixel's v25 had been signed by another key, so
+`adb install -r` refused (INSTALL_FAILED_UPDATE_INCOMPATIBLE) and the Pixel kept the old buttons and no VM password.
+Uninstalled once, v27 installed; from now on every release installs over the last. Second cause of "cannot connect":
+the VM's Xvnc blacklists an address after 5 failed logins (TigerVNC BlacklistThreshold 5, timeout 10 s doubling, every
+attempt while blocked prolongs nothing but shows REFUSED); it cannot be changed live by vncconfig.
