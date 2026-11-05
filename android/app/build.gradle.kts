@@ -18,6 +18,14 @@ android {
         versionName = appVersion.toString()
     }
 
+    // 5.11.2026: the GitHub build signs with the saved key (secret ANDROID_DEBUG_KEYSTORE_B64 → $DEBUG_KEYSTORE), named
+    // here explicitly: on the runner the default ~/.android was not the folder Gradle used, and each run got a new key
+    System.getenv("DEBUG_KEYSTORE")?.let { ks ->
+        signingConfigs.getByName("debug") {
+            storeFile = file(ks); storePassword = "android"; keyAlias = "androiddebugkey"; keyPassword = "android"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

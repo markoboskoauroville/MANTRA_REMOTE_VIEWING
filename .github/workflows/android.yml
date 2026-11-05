@@ -40,7 +40,8 @@ jobs:
         run: |
           mkdir -p ~/.android
           if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/debug.keystore"
+            echo "DEBUG_KEYSTORE=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"   # app/build.gradle.kts reads it
             echo "Signing with the saved debug keystore."
           else
             echo "::warning::No ANDROID_DEBUG_KEYSTORE_B64 secret: signed with a fresh key, will not install over an older build."
