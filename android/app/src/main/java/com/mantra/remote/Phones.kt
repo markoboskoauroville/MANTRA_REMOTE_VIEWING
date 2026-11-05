@@ -41,12 +41,15 @@ data class Phone(val name: String, val address: String)
 
 object Phones {
     private const val KEY = "phones"
-    /** The Pixel 7 on Tailscale (adb on TCP 5555), known from the start. */
-    private val DEFAULT = listOf(Phone("PIXEL 7", "100.70.23.53:5555"))
+    /** The Pixel 7 and (v29) the Nothing Phone on Tailscale (adb on TCP 5555), known from the start, so each phone
+     *  lists the other even without the Tailscale key (Marko, 5.11.2026: "Look from Pixel 7 to Nothing Phone"). */
+    private val DEFAULT = listOf(Phone("PIXEL 7", "100.70.23.53:5555"), Phone("NOTHING PHONE 2A", "100.67.149.40:5555"))
 
     fun all(prefs: android.content.SharedPreferences?): List<Phone> {
         val saved = prefs?.getString(KEY, null) ?: return DEFAULT
-        return saved.lines().mapNotNull { l -> l.split('|').takeIf { it.size == 2 }?.let { Phone(it[0], it[1]) } }
+        val list = saved.lines().mapNotNull { l -> l.split('|').takeIf { it.size == 2 }?.let { Phone(it[0], it[1]) } }
+        // v29: a list saved before the Nothing was known gets it too
+        return list + DEFAULT.filter { d -> list.none { it.address == d.address } }
     }
 
     fun add(prefs: android.content.SharedPreferences?, p: Phone) {
