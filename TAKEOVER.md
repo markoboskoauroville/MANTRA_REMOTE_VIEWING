@@ -1,5 +1,7 @@
 # TAKEOVER: Mantra Remote VNC (Android)
 
+**State 8.11.2026, v38:** the settings dialog (⚙) redesigned (Marko: "circle with X ... closing the dialogue", "back to login", "button to update the app ... GitHub page"): a circled ✕ at the top right closes it; at the bottom only two buttons, ⬇ UPDATE APP (opens the GitHub latest release page: download, install by hand) and ← BACK TO LOGIN (link closed, first page to pick another machine). QUIT APP, CLOSE MAC and BACK are gone. Built by GitHub Actions only.
+
 **State 8.11.2026, v36 (installed on both phones, tested on the Nothing Phone 2a; Marko: test only on the Nothing):**
 DOCK asks the Dock Switcher v15 (`/dock?show=1|0`) to switch the Dock's hiding off, then moves the picture to the bar at
 the zoom he has (switching to the BenQ if the bar is there), and the pointer onto the bar (not with VIEW on: view only
