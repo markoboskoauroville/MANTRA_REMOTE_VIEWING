@@ -243,3 +243,4 @@ after you do updates, find on Wi-Fi my Pixel 7 phone and install the new version
 
 I'm also not sure what scrolling is doing. There is a scroll action button what it should do is should scroll. It should select window under the tap. And then if I'm uh dragging my finger up or down, it emulates the scrolling behavior of mouse button. And also you need to d debug my mouse long press. So if I'm long pressing on the A left. Or right. They cannot be selected. Mm. Same time. They lock in. And that means that when I tap on the screen Tapping with only left mouse button. Or with only right mouse button, but the tapping is happening immediately. On the location of the tap. I get click. Left or click right.
 **Status:** saved first.
+**Status (8.11.2026):** v39: SCROLL at the finger (pointer first, tick every 20 px); L/R long press = click mode (TAP=L / TAP=R, exclusive), tap clicks immediately at the finger; D unchanged. Pixel 7 install after the build.

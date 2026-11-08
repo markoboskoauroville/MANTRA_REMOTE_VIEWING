@@ -125,10 +125,10 @@ private fun helpText(label: String): String {
         l == "✕" -> "Closes the link to the Mac and goes back to the settings page."
         l.contains("KEYS") || l == "⌨" -> "Opens the phone's keyboard. What you type is typed on the Mac."
         l == "🖱" || l == "MOUSE" -> "MOUSE: while it is lit, one finger moves the Mac's pointer to where it touches, without clicking. Three fingers tapped together click, two fingers tapped together right-click, where the pointer stands. Spreading, pinching and three-finger panning still work."
-        l == "L" -> "The left mouse button: a short press clicks where the pointer stands; a long press locks it down (lit, LOCKED), moving the pointer then drags; another long press lets it go."
-        l == "R" -> "The right mouse button: a short press right-clicks where the pointer stands; a long press locks it down (lit, LOCKED); another long press lets it go."
+        l == "L" -> "The left mouse button: a short press clicks where the pointer stands; a long press lights it (TAP=L): then every tap on the screen left-clicks at once where the finger touches (a finger moved on is a drag). Lighting R puts L out; another long press switches it off."
+        l == "R" -> "The right mouse button: a short press right-clicks where the pointer stands; a long press lights it (TAP=R): then every tap on the screen right-clicks at once where the finger touches. Lighting L puts R out; another long press switches it off."
         l == "D" -> "DRAG: the first press holds the Mac's left button down where the pointer stands; moving the pointer then drags; the second press lets the button go (lit green while held)."
-        l == "SCROLL" -> "While it is lit, one finger dragging up or down turns the Mac's mouse wheel instead of moving the pointer."
+        l == "SCROLL" -> "While it is lit, put a finger on a window and drag it up or down: the pointer goes there first, so that window turns, as with a mouse wheel."
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l.removePrefix("C").trim() in setOf("FULL", "65K", "4096", "512", "64", "8", "B/W") || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
         l.startsWith("NEXT") || l == "⇥" -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first."
@@ -843,6 +843,9 @@ private fun Live(s: Session) {
     // v24: the mouse button locked down: 0 none, 1 the left (L long press, or D), 4 the right (R long press)
     var held by remember { mutableIntStateOf(0) }
     val dragHeld = held == 1
+    // v39 (Marko, 8.11.2026): L and R long-pressed are a click MODE, one at a time: with L lit a tap on the screen clicks
+    // left at once where the finger touches, with R lit it clicks right there; 0 = none (the finger only moves the pointer)
+    var clickLock by remember { mutableIntStateOf(0) }
     // VIEW ONLY is remembered like FPS: watching stays watching after a restart
     var viewOnly by remember { mutableStateOf(s.prefs?.getBoolean("view_only", false) ?: false) }
     LaunchedEffect(rfb, viewOnly) { rfb.viewOnly = viewOnly; s.prefs?.edit()?.putBoolean("view_only", viewOnly)?.apply() }
@@ -957,8 +960,15 @@ private fun Live(s: Session) {
             rfb.probe()
         }.start()
     }
-    fun toggleDrag() = toggleHold(1)
-    fun setMouse(on: Boolean) { mouseMode = on; if (on) { scrollMode = false; viewOnly = false } else if (held != 0) toggleHold(held) }
+    fun toggleDrag() { if (clickLock != 0) clickLock = 0; toggleHold(1) }
+    fun toggleLock(button: Int) {
+        if (clickLock != button && viewOnly) { travelling("VIEW ONLY: NO CLICK"); return }
+        if (held != 0) toggleHold(held)                       // a drag lock ends first: the two never run together
+        clickLock = if (clickLock == button) 0 else button    // L and R exclude each other
+        val name = if (button == 1) "LEFT" else "RIGHT"
+        travelling(if (clickLock != 0) "$name CLICK ON: TAP CLICKS" else "$name CLICK OFF", picture = true)
+    }
+    fun setMouse(on: Boolean) { mouseMode = on; if (on) { scrollMode = false; viewOnly = false } else { clickLock = 0; if (held != 0) toggleHold(held) } }
     LaunchedEffect(Unit) { if (mouseMode && viewOnly) viewOnly = false }
     fun tapKey(k: Int) {
         travelling((mods.value.mapNotNull { m -> MOD_KEYS.firstOrNull { it.second == m }?.first } + KEY_NAMES.getOrElse(k) { "KEY" }).joinToString(" "))
@@ -1194,7 +1204,7 @@ private fun Live(s: Session) {
         modifier
             .background(Color.Black)
             .onSizeChanged { viewSize = it }
-            .pointerInput(rect.contentHashCode(), scrollMode, viewOnly, mouseMode) {
+            .pointerInput(rect.contentHashCode(), scrollMode, viewOnly, mouseMode, clickLock) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     val start = down.position
@@ -1207,11 +1217,20 @@ private fun Live(s: Session) {
                     var fingers = 1          // the most fingers down at once in this gesture
                     var multiTravel = 0f     // how far two or three fingers went: little = a tap, a click in MOUSE mode
                     val mouse = mouseMode && !viewOnly && !scrollMode
+                    // v39: L or R lit: the button goes down at once where the finger lands, follows it, lets go on lifting
+                    var lockDown = false
+                    if (mouse && clickLock != 0) {
+                        val at = toFb(start); mouseAt = at; lockDown = true
+                        rfb.pointer(at.first, at.second, 0); rfb.pointer(at.first, at.second, clickLock)
+                    }
+                    // v39: SCROLL: the pointer goes to the finger first, so the window under it is the one that turns
+                    if (scrollMode && !viewOnly) { val (sx, sy) = toFb(start); mouseAt = sx to sy; rfb.pointer(sx, sy, 0) }
                     while (true) {
                         val event = awaitPointerEvent()
                         val pressed = event.changes.filter { it.pressed }
                         if (pressed.isEmpty()) break
                         if (pressed.size > fingers) fingers = pressed.size
+                        if (lockDown && pressed.size >= 2) { val at = mouseAt; lockDown = false; if (at != null) rfb.pointer(at.first, at.second, 0) }   // a second finger: that was no tap
                         if (pressed.size >= 2) multiTravel += pressed.maxOf { it.positionChange().getDistance() }
                         // Marko's gestures (25.10.2026): two fingers zoom, three fingers pan, one finger is the mouse.
                         // Nothing done with two or three fingers reaches the Mac.
@@ -1252,15 +1271,17 @@ private fun Live(s: Session) {
                         if (mouse) {
                             // MOUSE: the pointer follows the finger, no button; not in the first 80 ms, so the first finger of
                             // a two- or three-finger tap leaves the pointer where it is
-                            if (moved || System.currentTimeMillis() - t0 > 80) { val at = toFb(p); mouseAt = at; rfb.pointer(at.first, at.second, held) }
+                            if (lockDown) { val at = toFb(p); mouseAt = at; rfb.pointer(at.first, at.second, clickLock) }
+                            else if (moved || System.currentTimeMillis() - t0 > 80) { val at = toFb(p); mouseAt = at; rfb.pointer(at.first, at.second, held) }
                         } else if (scrollMode) {
                             // one finger in SCROLL: up and down turn the Mac's wheel
                             scrollAcc += c.positionChange().y
-                            val (fx, fy) = toFb(start)
-                            while (abs(scrollAcc) > 40f) {
+                            val (fx, fy) = toFb(p)      // v39: at the finger, so the window under it turns
+                            mouseAt = fx to fy
+                            while (abs(scrollAcc) > 20f) {
                                 val button = if (scrollAcc > 0) 8 else 16   // finger down = content down = wheel up
-                                rfb.pointer(fx, fy, button); rfb.pointer(fx, fy, 0)
-                                scrollAcc -= 40f * kotlin.math.sign(scrollAcc)
+                                rfb.pointer(fx, fy, button); Thread.sleep(4); rfb.pointer(fx, fy, 0)
+                                scrollAcc -= 20f * kotlin.math.sign(scrollAcc)
                             }
                         } else if (lx && fitView && !dragging && moved) {
                             pan = clampPan(pan + c.positionChange())   // v26 FIT: the finger moves the picture
@@ -1280,6 +1301,14 @@ private fun Live(s: Session) {
                     val quick = System.currentTimeMillis() - t0 < 400
                     if (mouse) {
                         // MOUSE: a short tap of three fingers clicks, of two fingers right-clicks, where the pointer is
+                        if (lockDown) {
+                            // the button was pressed at t0: held at least 60 ms in all, as a hand does (a press and a release in the same instant can be lost)
+                            val to = toFb(last); mouseAt = to
+                            val wait = (60 - (System.currentTimeMillis() - t0)).coerceAtLeast(0)
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            Thread { Thread.sleep(wait); rfb.pointer(to.first, to.second, 0); rfb.probe() }.start()
+                            return@awaitEachGesture
+                        }
                         if (!multi) { val to = toFb(last); mouseAt = to; rfb.pointer(to.first, to.second, held); return@awaitEachGesture }
                         val at = mouseAt
                         if (at != null && System.currentTimeMillis() - t0 < 400 && multiTravel < 60f) {
@@ -1425,8 +1454,8 @@ private fun Live(s: Session) {
         // v17: 🖱 beside ⌨ (Marko, 27.10.2026: "a keyboard icon ... and next to it there must be a mouse icon")
         Key("🖱", modifier, active = mouseMode, size = 24, padH = ROW_PAD) { setMouse(!mouseMode) }
         if (mouseMode) {
-            Key("L", Modifier.weight(0.6f), active = held == 1, size = 18, sub = if (held == 1) "LOCKED" else "CLICK", padH = 2, onLongClick = { toggleHold(1) }) { mouseClick(1) }
-            Key("R", Modifier.weight(0.6f), active = held == 4, size = 18, sub = if (held == 4) "LOCKED" else "CLICK", padH = 2, onLongClick = { toggleHold(4) }) { mouseClick(4) }
+            Key("L", Modifier.weight(0.6f), active = clickLock == 1, size = 18, sub = if (clickLock == 1) "TAP=L" else "CLICK", padH = 2, onLongClick = { toggleLock(1) }) { mouseClick(1) }
+            Key("R", Modifier.weight(0.6f), active = clickLock == 4, size = 18, sub = if (clickLock == 4) "TAP=R" else "CLICK", padH = 2, onLongClick = { toggleLock(4) }) { mouseClick(4) }
             Key("D", Modifier.weight(0.6f), active = dragHeld, size = 18, sub = "DRAG", padH = 2) { toggleDrag() }
         }
     }
@@ -1598,8 +1627,8 @@ private fun Live(s: Session) {
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
                 RailKey("MOUSE", null, if (mouseMode) RailState.ON else RailState.OFF) { setMouse(!mouseMode) }
                 if (mouseMode) {
-                    RailKey("L", if (held == 1) "LOCKED" else "CLICK", if (held == 1) RailState.ON else RailState.OFF, onLongClick = { toggleHold(1) }) { mouseClick(1) }
-                    RailKey("R", if (held == 4) "LOCKED" else "CLICK", if (held == 4) RailState.ON else RailState.OFF, onLongClick = { toggleHold(4) }) { mouseClick(4) }
+                    RailKey("L", if (clickLock == 1) "TAP=L" else "CLICK", if (clickLock == 1) RailState.ON else RailState.OFF, onLongClick = { toggleLock(1) }) { mouseClick(1) }
+                    RailKey("R", if (clickLock == 4) "TAP=R" else "CLICK", if (clickLock == 4) RailState.ON else RailState.OFF, onLongClick = { toggleLock(4) }) { mouseClick(4) }
                     RailKey("D", "DRAG", if (dragHeld) RailState.ON else RailState.OFF) { toggleDrag() }
                 }
                 RailKey("NEXT", "TAB", RailState.OFF) { nextTab() }
