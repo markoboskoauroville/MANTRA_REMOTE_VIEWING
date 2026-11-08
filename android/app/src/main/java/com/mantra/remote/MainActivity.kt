@@ -141,6 +141,7 @@ private fun helpText(label: String): String {
         l == "⇄" -> "Switches the picture between the two screens: the BenQ and the MacBook Pro. The small word under it is the screen you are watching now."
         l.contains("FULL") || l == "⛶" -> "Full screen: the phone turns sideways and the Mac fills it, with the keys as words at the sides. EXIT brings you back."
         l == "EXIT" -> "Leaves full screen."
+        l == "APPS" -> "The view moves to the middle of the next open window on the Mac, at the zoom you have, on either screen: left to right, then around again. A long press: the window before. Nothing on the Mac is clicked; only your view moves."
         l.startsWith("VIEW") -> "View only: the mouse does not reach the Mac: no click, no drag, no scroll. You can watch, zoom and move around the picture; one finger moves the zoomed picture. The keys still work: ESC, DOCK, ⇥ (next tab), typing, every key. Tap again to use the mouse on the Mac."
         l == "⌘" -> "Command, held down on the Mac while it is lit. Tap it on, then TAB, TAB, TAB walks the app switcher; tap it off to choose. ⌘ on, then Q, then ⌘ off quits an app."
         l == "⌥" -> "Option. Tap it, then the next key: they are pressed together. It turns off after one use."
@@ -837,6 +838,8 @@ private fun Live(s: Session) {
     var mouseAt by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // v35: what DOCK found before it moved the picture: given back on the second press
     var dockBefore by remember { mutableStateOf<DockBefore?>(null) }
+    // v37: the window APPS stands on (its place in the Mac's list, left to right)
+    var appsIndex by remember { mutableIntStateOf(-1) }
     // v24: the mouse button locked down: 0 none, 1 the left (L long press, or D), 4 the right (R long press)
     var held by remember { mutableIntStateOf(0) }
     val dragHeld = held == 1
@@ -1088,6 +1091,49 @@ private fun Live(s: Session) {
                 view.post { s.landed() }
             }.start()
         }
+    }
+
+    // v37 APPS (Marko, 8.11.2026: "imagine the Mantra remote is like a window to my Mac ... on whatever level of zoom I
+    // am ... it's going to scroll to next open app on the screen ... my window is at the middle of iTerm, whatever zoom
+    // level is ... It's like automatic pan and scanning. It targets each open window"): the Dock Switcher lists the open
+    // windows in the picture's pixels (left to right, both screens); a tap moves the view to the next one's middle, a
+    // long press to the one before, at the zoom he has, switching the monitor when the window is on the other one.
+    // Nothing is clicked or brought to the front: only the view moves.
+    fun appsStep(step: Int) {
+        val host = s.sisterHost.ifEmpty { MacFinder.MAC_TAILSCALE_IP }
+        travelling(if (step > 0) "APPS ▶" else "◀ APPS")
+        Thread {
+            val got = MacSister.windows(host)
+            if (got == null || got.first.isEmpty()) { view.post { s.pressed = if (got == null) "APPS: THE MAC DID NOT ANSWER" else "APPS: NO OPEN WINDOW" }; return@Thread }
+            val (wins, size) = got
+            view.post {
+                val i = ((appsIndex + step) % wins.size + wins.size) % wins.size
+                appsIndex = i
+                val w = wins[i]
+                val kx = if (size.first > 0) s.fbW / size.first else 1.0; val ky = if (size.second > 0) s.fbH / size.second else 1.0
+                val px = (w.x + w.w / 2) * kx; val py = (w.y + w.h / 2) * ky
+                val on = MONITORS.indexOfFirst { px >= it.x && px < it.x + it.w && py >= it.y && py < it.y + it.h }
+                val switch = on >= 0 && on != monitor && monitorRect(on, s.fbW, s.fbH)[2] != s.fbW
+                val keepZoom = zoom
+                val target = if (switch) on else monitor
+                if (switch) monitor = on
+                view.postDelayed({
+                    val r = monitorRect(target, s.fbW, s.fbH)
+                    val vw = viewSize.width.toFloat(); val vh = viewSize.height.toFloat()
+                    if (vw > 0 && r[2] > 0) {
+                        val f = minOf(vw / r[2], vh / r[3]); val k = f * keepZoom
+                        val bx = (vw - r[2] * f) / 2f; val by = (vh - r[3] * f) / 2f
+                        fun axis(v: Float, sz: Float, vv: Float, base: Float) =
+                            if (sz <= vv) (vv - sz) / 2f - base else v.coerceIn(vv - sz - base, -base)
+                        zoom = keepZoom
+                        pan = Offset(axis(vw / 2f - bx - (px - r[0]).toFloat() * k, r[2] * k, vw, bx),
+                            axis(vh / 2f - by - (py - r[1]).toFloat() * k, r[3] * k, vh, by))
+                    }
+                    s.pressed = "${i + 1}/${wins.size} ${w.app.uppercase()}"; s.pressedAt = System.currentTimeMillis()
+                    view.postDelayed({ s.landed() }, 1500)
+                }, if (switch) 200L else 0L)
+            }
+        }.start()
     }
 
     // ☰ MENU: the action keys become the menu bar's (Marko, 26.10.2026: "one button, which will switch all of these
@@ -1407,6 +1453,7 @@ private fun Live(s: Session) {
         else {
             Key("⇄", Modifier.weight(0.7f), size = 22, sub = if (monitor == 0) "BENQ" else "MACBOOK", padH = 2) { monitor = 1 - monitor }
             Key("DOCK", Modifier.weight(1f), size = 14, padH = ROW_PAD, onLongClick = { dock() }) { dockHiding() }
+            Key("APPS", Modifier.weight(1f), size = 14, padH = ROW_PAD, onLongClick = { appsStep(-1) }) { appsStep(1) }
             Key("LOGIN", Modifier.weight(1.05f), size = 14, padH = ROW_PAD) { login() }
             Key("☰", Modifier.weight(0.6f), size = 22, padH = ROW_PAD) { menuOn() }
         }
@@ -1552,6 +1599,7 @@ private fun Live(s: Session) {
                 }
                 RailKey("NEXT", "TAB", RailState.OFF) { nextTab() }
                 if (!lx) RailKey("DOCK", null, RailState.OFF, onLongClick = { dock() }) { dockHiding() }
+                if (!lx) RailKey("APPS", null, RailState.OFF, onLongClick = { appsStep(-1) }) { appsStep(1) }
                 RailKey("SCROLL", null, if (scrollMode) RailState.ON else RailState.OFF) { scrollMode = !scrollMode }
                 RailKey("FPS", FPS[fpsIndex].first, RailState.OFF, onLongClick = { fpsMenu = true }) { fpsIndex = (fpsIndex + 1) % FPS.size }
                 RailKey("COL", colours.label, RailState.OFF, onLongClick = { coloursMenu = true }) {

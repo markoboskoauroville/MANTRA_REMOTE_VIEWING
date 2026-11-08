@@ -83,6 +83,17 @@ object MacSister {
             }.getOrNull()
         }
 
+    /** v37: an open window on the Mac, in the VNC picture's pixels (Dock Switcher v16, GET /windows). */
+    data class Win(val app: String, val title: String, val x: Double, val y: Double, val w: Double, val h: Double)
+    fun windows(host: String): Pair<List<Win>, Pair<Double, Double>>? = get(host, "/windows", 4000)?.let { b ->
+        runCatching {
+            val j = JSONObject(String(b)); val a = j.getJSONArray("windows")
+            (0 until a.length()).map { i -> val o = a.getJSONObject(i)
+                Win(o.optString("app"), o.optString("title"), o.getDouble("x"), o.getDouble("y"), o.getDouble("w"), o.getDouble("h")) } to
+                (j.optDouble("tw", 0.0) to j.optDouble("th", 0.0))
+        }.getOrNull()
+    }
+
     /** Switch to the app, or start it: true when the Mac did it. */
     fun open(host: String, id: String): Boolean = get(host, "/open?id=" + URLEncoder.encode(id, "UTF-8"), 4000) != null
 }
