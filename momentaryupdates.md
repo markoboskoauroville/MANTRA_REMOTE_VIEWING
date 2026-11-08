@@ -230,3 +230,10 @@ now fix my application Right now on my phone I am running Mantra Remote. Please 
 And you need to update my remote controller, remote Mantra still. I need another action button called Apps. And this Apps, what it's going to do, is going to just imagine the Mantra remote is like a window to my Mac, which it is. And on whatever level of zoom I am inside my Mantra remote, it's going to scroll to next open app on the screen. So if I press, press up button, it finds, for example, iTerm, and my window is at the middle of iTerm, whatever zoom level is. And then there is a Chrome, and then it goes to the Chrome in my— through my window. It's like automatic pan and scanning. It targets off each open window on the screen so I can switch quickly. If I open multiple windows, I can easily pan and scan to each of them.
 
 windows positions should be memorized across 2 monitors, so restore comes back to the right monitor
+
+## 8.11.2026, 12:40 (Marko, word for word)
+
+Please update mantra remote. It needs to have button to update the app, basically going to the GitHub page. And downloading and manual installing. And the most important buttons to close the dialogue in settings, redesign. At the top of the settings, put circle with X in it. This is closing the dialogue. And in the settings, there must be another button. We just call it back to login. And then it take you back to connect to the different machine. So only two buttons, simple to understand.
+
+after you do updates, find on Wi-Fi my Pixel 7 phone and install the new version
+**Status:** saved first.
