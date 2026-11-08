@@ -250,3 +250,6 @@ I'm also not sure what scrolling is doing. There is a scroll action button what 
 
 update the app and back to login should be at the top
 **Status:** saved first.
+
+"and update the app should list current version also" (Marko, 8.11.2026, 12:53)
+**Status:** saved first.
