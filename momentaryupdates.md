@@ -238,3 +238,8 @@ Please update mantra remote. It needs to have button to update the app, basicall
 after you do updates, find on Wi-Fi my Pixel 7 phone and install the new version
 **Status:** saved first.
 **Status (8.11.2026):** v38 pushed: circled ✕ at the top of ⚙, ⬇ UPDATE APP (GitHub latest release), ← BACK TO LOGIN; the three old bottom buttons removed. Pixel 7 install after the release builds.
+
+## 8.11.2026, 13:05 (Marko, word for word)
+
+I'm also not sure what scrolling is doing. There is a scroll action button what it should do is should scroll. It should select window under the tap. And then if I'm uh dragging my finger up or down, it emulates the scrolling behavior of mouse button. And also you need to d debug my mouse long press. So if I'm long pressing on the A left. Or right. They cannot be selected. Mm. Same time. They lock in. And that means that when I tap on the screen Tapping with only left mouse button. Or with only right mouse button, but the tapping is happening immediately. On the location of the tap. I get click. Left or click right.
+**Status:** saved first.
