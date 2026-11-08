@@ -254,3 +254,4 @@ update the app and back to login should be at the top
 "and update the app should list current version also" (Marko, 8.11.2026, 12:53)
 **Status:** saved first.
 **Status (8.11.2026):** v40: both buttons in one row at the top of ⚙; UPDATE APP shows NOW v<installed version>.
+**Status (8.11.2026, 13:05):** v40 installed on the Pixel 7 and the Nothing over Tailscale (versionName=40 read back on both).
