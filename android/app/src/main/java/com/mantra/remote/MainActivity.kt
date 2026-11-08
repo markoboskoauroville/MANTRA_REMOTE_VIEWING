@@ -106,7 +106,9 @@ private val Mono = FontFamily.Monospace
 private data class Monitor(val name: String, val x: Int, val y: Int, val w: Int, val h: Int)
 private val MONITORS = listOf(
     Monitor("1 BENQ", 0, 0, 2560, 1440),
-    Monitor("2 MACBOOK", 2560, 0, 3024, 1964),
+    // v36 (measured 8.11.2026): the Retina's top now stands 397 points below the BenQ's (System Settings' arrangement):
+    // the server puts every screen at its top-left in points and draws it at its pixel size, so the picture is 5584x2361
+    Monitor("2 MACBOOK", 2560, 397, 3024, 1964),
 )
 
 private const val PREFS = "remote"
@@ -1037,22 +1039,48 @@ private fun Live(s: Session) {
                 val d = if (was != null) MacSister.dock(host, true) else null
                 if (d == null) { view.post { travelling("DOCK ⇅ (KEYS)") }; dockKeys(); return@Thread }
                 view.post {
-                    dockBefore = DockBefore(zoom, pan, mouseAt, was!!.hidden)
-                    val fx = rect[0] + ((d.x + d.w / 2) * rect[2]).toFloat()
-                    val fBottom = rect[1] + ((d.y + d.h) * rect[3]).toFloat()
-                    // the bar's middle under the phone's middle, its bottom on the phone's bottom edge
-                    pan = clampPan(Offset(viewSize.width / 2f - baseX() - (fx - rect[0]) * scale(),
-                        viewSize.height - baseY() - (fBottom - rect[1]) * scale()))
-                    val mx = fx.roundToInt(); val my = (rect[1] + (d.y + d.h / 2) * rect[3]).roundToInt()
+                    dockBefore = DockBefore(zoom, pan, mouseAt, was!!.hidden, monitor)
+                    // the bar in the picture: the Mac's own pixels (scaled if the picture is not the size it expects),
+                    // else its fractions on the shown monitor
+                    val kx = if (d.tw > 0) s.fbW / d.tw else 1.0; val ky = if (d.th > 0) s.fbH / d.th else 1.0
+                    val px: Double; val pBottom: Double; val py: Double
+                    if (d.fw > 0) { px = (d.fx + d.fw / 2) * kx; pBottom = (d.fy + d.fh) * ky; py = (d.fy + d.fh / 2) * ky }
+                    else { px = rect[0] + (d.x + d.w / 2) * rect[2]; pBottom = rect[1] + (d.y + d.h) * rect[3]; py = rect[1] + (d.y + d.h / 2) * rect[3] }
+                    // the monitor the bar is on, when the phone shows one monitor at a time
+                    val on = MONITORS.indexOfFirst { px >= it.x && px < it.x + it.w && py >= it.y && py < it.y + it.h }
+                    val switch = on >= 0 && on != monitor && monitorRect(on, s.fbW, s.fbH)[2] != s.fbW
+                    val keepZoom = zoom
+                    if (switch) monitor = on
+                    val mx = px.roundToInt(); val my = py.roundToInt()
                     mouseAt = mx to my
                     Thread { rfb.pointer(mx, my, 0); rfb.probe() }.start()
-                    s.landed()
+                    // after a monitor switch its own reset runs first: the picture is placed a moment later
+                    view.postDelayed({
+                        // computed here from the monitor now shown (the composition's own helpers may still hold
+                        // the one before the switch): the bar's middle under the phone's middle, its bottom on the
+                        // phone's bottom edge, at the zoom he had, never past the picture's edges
+                        val r = monitorRect(on.takeIf { switch } ?: dockBefore?.monitor ?: 0, s.fbW, s.fbH)
+                        val vw = viewSize.width.toFloat(); val vh = viewSize.height.toFloat()
+                        if (vw > 0 && r[2] > 0) {
+                            val f = minOf(vw / r[2], vh / r[3]); val k = f * keepZoom
+                            val bx = (vw - r[2] * f) / 2f; val by = (vh - r[3] * f) / 2f
+                            fun axis(v: Float, size: Float, view: Float, base: Float) =
+                                if (size <= view) (view - size) / 2f - base else v.coerceIn(view - size - base, -base)
+                            zoom = keepZoom
+                            pan = Offset(axis(vw / 2f - bx - (px - r[0]).toFloat() * k, r[2] * k, vw, bx),
+                                axis(vh - by - (pBottom - r[1]).toFloat() * k, r[3] * k, vh, by))
+                        }
+                        s.landed()
+                    }, if (switch) 200L else 0L)
                 }
             }.start()
         } else {
             travelling("DOCK ↑ VIEW BACK")
             dockBefore = null
-            zoom = before.zoom; pan = before.pan; mouseAt = before.mouse
+            val back = before.monitor != monitor
+            if (back) monitor = before.monitor
+            mouseAt = before.mouse
+            view.postDelayed({ zoom = before.zoom; pan = before.pan }, if (back) 200L else 0L)
             Thread {
                 if (MacSister.dock(host, !before.hidden) == null) dockKeys()
                 before.mouse?.let { (x, y) -> rfb.pointer(x, y, 0) }
@@ -1724,4 +1752,4 @@ internal fun TypingField(onText: (String) -> Unit, onBackspace: () -> Unit) {
 }
 
 /** v35: the view and the Dock's hiding as they were before DOCK moved them. */
-data class DockBefore(val zoom: Float, val pan: Offset, val mouse: Pair<Int, Int>?, val hidden: Boolean)
+data class DockBefore(val zoom: Float, val pan: Offset, val mouse: Pair<Int, Int>?, val hidden: Boolean, val monitor: Int)

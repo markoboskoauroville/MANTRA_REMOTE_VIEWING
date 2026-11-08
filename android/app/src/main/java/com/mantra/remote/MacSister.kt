@@ -68,13 +68,18 @@ object MacSister {
      * v35 (Marko, 8.11.2026: "dock button actually unhide the dock"): the Dock's own hiding set on the Mac (show true:
      * stays shown; false: hides itself again; null: only asked), and where its bar stands, as fractions of its screen.
      */
-    data class DockState(val hidden: Boolean, val x: Double, val y: Double, val w: Double, val h: Double)
+    data class DockState(val hidden: Boolean, val x: Double, val y: Double, val w: Double, val h: Double,
+                         /** v36: the bar in the VNC picture's pixels, and the picture's size by the Mac's rule (0: unknown) */
+                         val fx: Double = 0.0, val fy: Double = 0.0, val fw: Double = 0.0, val fh: Double = 0.0,
+                         val tw: Double = 0.0, val th: Double = 0.0)
     fun dock(host: String, show: Boolean?): DockState? =
         get(host, "/dock" + (show?.let { if (it) "?show=1" else "?show=0" } ?: ""), 4000)?.let { b ->
             runCatching {
                 val j = JSONObject(String(b))
                 if (!j.optBoolean("ok")) null
-                else DockState(j.optBoolean("hidden"), j.optDouble("x", 0.25), j.optDouble("y", 0.94), j.optDouble("w", 0.5), j.optDouble("h", 0.06))
+                else DockState(j.optBoolean("hidden"), j.optDouble("x", 0.25), j.optDouble("y", 0.94), j.optDouble("w", 0.5), j.optDouble("h", 0.06),
+                    j.optDouble("fx", 0.0), j.optDouble("fy", 0.0), j.optDouble("fw", 0.0), j.optDouble("fh", 0.0),
+                    j.optDouble("tw", 0.0), j.optDouble("th", 0.0))
             }.getOrNull()
         }
 
