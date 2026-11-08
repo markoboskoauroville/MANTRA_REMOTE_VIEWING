@@ -1463,7 +1463,12 @@ private fun Live(s: Session) {
     // is two steps: Settings and then X")
     if (settingsOpen) Dialog(onDismissRequest = { settingsOpen = false }) {
         Column(Modifier.background(Bg).border(1.dp, Rule).verticalScroll(rememberScrollState()).padding(14.dp).width(300.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { T("── SETTINGS ──", AmberDim, 13) }   // titles in the middle (Marko, 26.10.2026)
+            // v38 (Marko, 8.11.2026): a circle with ✕ at the top closes the dialog
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                T("── SETTINGS ──", AmberDim, 13)   // titles in the middle (Marko, 26.10.2026)
+                Box(Modifier.align(Alignment.CenterEnd).size(40.dp).border(1.5.dp, Color(0xFFFFB000), CircleShape)
+                    .clickable { settingsOpen = false }, contentAlignment = Alignment.Center) { T("✕", Color(0xFFFFB000), 20) }
+            }
             // in ⚙ every number starts at the left edge, padded on its right, so the units stand in one column (Marko, 26.10.2026)
             val vnc = "%-7s MB  ↓ %s  ↑ %s".format("%.2f".format((rx + tx) / 1e6), "%.2f".format(rx / 1e6), "%.2f".format(tx / 1e6))
             val speed = "%-7s kbit/s".format(kbps)
@@ -1532,13 +1537,13 @@ private fun Live(s: Session) {
             Key(if (rowViews) "ROW 3 VIEWS: ON" else "ROW 3 VIEWS: OFF", Modifier.fillMaxWidth(), active = rowViews, size = 14) {
                 rowViews = !rowViews; s.prefs?.edit()?.putBoolean(ROW_VIEWS, rowViews)?.apply()
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                // QUIT APP on the left, BACK (leaves ⚙) on the right (Marko, 26.10.2026)
-                Key("✕ QUIT APP", Modifier.weight(1f), size = 14) { settingsOpen = false; s.hangUp(); activity.finish() }
-                // v16: the link closed, the first screen back, to choose another place
-                Key(if (lx) "✕ CLOSE" else "✕ CLOSE MAC", Modifier.weight(1f), size = 14) { settingsOpen = false; s.phone = null; s.hangUp() }
-                Key("BACK", Modifier.weight(1f), size = 14) { settingsOpen = false }
+            // v38 (Marko, 8.11.2026): two buttons only: UPDATE APP (the GitHub release page, download and install by hand)
+            // and BACK TO LOGIN (the link closed, the first page to choose another machine)
+            Key("⬇ UPDATE APP", Modifier.fillMaxWidth(), size = 14) {
+                activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://github.com/markoboskoauroville/MANTRA_REMOTE_VNC_TAILSCALE/releases/latest")))
             }
+            Key("← BACK TO LOGIN", Modifier.fillMaxWidth(), size = 14) { settingsOpen = false; s.phone = null; s.hangUp() }
         }
     }
 

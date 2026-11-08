@@ -237,3 +237,4 @@ Please update mantra remote. It needs to have button to update the app, basicall
 
 after you do updates, find on Wi-Fi my Pixel 7 phone and install the new version
 **Status:** saved first.
+**Status (8.11.2026):** v38 pushed: circled ✕ at the top of ⚙, ⬇ UPDATE APP (GitHub latest release), ← BACK TO LOGIN; the three old bottom buttons removed. Pixel 7 install after the release builds.
