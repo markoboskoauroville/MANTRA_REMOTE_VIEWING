@@ -245,3 +245,8 @@ I'm also not sure what scrolling is doing. There is a scroll action button what 
 **Status:** saved first.
 **Status (8.11.2026):** v39: SCROLL at the finger (pointer first, tick every 20 px); L/R long press = click mode (TAP=L / TAP=R, exclusive), tap clicks immediately at the finger; D unchanged. Pixel 7 install after the build.
 **Status (8.11.2026, 12:50):** v39 installed on the Pixel 7 and the Nothing Phone 2a over Tailscale (versionName=39 read back on both). Not yet tried by hand.
+
+## 8.11.2026, 12:52 (Marko, word for word)
+
+update the app and back to login should be at the top
+**Status:** saved first.
