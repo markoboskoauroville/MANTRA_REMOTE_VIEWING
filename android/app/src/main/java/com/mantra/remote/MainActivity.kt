@@ -1498,6 +1498,16 @@ private fun Live(s: Session) {
                 Box(Modifier.align(Alignment.CenterEnd).size(40.dp).border(1.5.dp, Color(0xFFFFB000), CircleShape)
                     .clickable { settingsOpen = false }, contentAlignment = Alignment.Center) { T("✕", Color(0xFFFFB000), 20) }
             }
+            // v40 (Marko, 8.11.2026: "update the app and back to login should be at the top"): one row under the title
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // "update the app should list current version also" (Marko, 8.11.2026)
+                val current = remember { runCatching { activity.packageManager.getPackageInfo(activity.packageName, 0).versionName }.getOrNull() ?: "?" }
+                Key("⬇ UPDATE APP", Modifier.weight(1f), size = 14, sub = "NOW v$current") {
+                    activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://github.com/markoboskoauroville/MANTRA_REMOTE_VNC_TAILSCALE/releases/latest")))
+                }
+                Key("← BACK TO LOGIN", Modifier.weight(1f), size = 14, sub = "OTHER MACHINE") { settingsOpen = false; s.phone = null; s.hangUp() }
+            }
             // in ⚙ every number starts at the left edge, padded on its right, so the units stand in one column (Marko, 26.10.2026)
             val vnc = "%-7s MB  ↓ %s  ↑ %s".format("%.2f".format((rx + tx) / 1e6), "%.2f".format(rx / 1e6), "%.2f".format(tx / 1e6))
             val speed = "%-7s kbit/s".format(kbps)
@@ -1566,13 +1576,6 @@ private fun Live(s: Session) {
             Key(if (rowViews) "ROW 3 VIEWS: ON" else "ROW 3 VIEWS: OFF", Modifier.fillMaxWidth(), active = rowViews, size = 14) {
                 rowViews = !rowViews; s.prefs?.edit()?.putBoolean(ROW_VIEWS, rowViews)?.apply()
             }
-            // v38 (Marko, 8.11.2026): two buttons only: UPDATE APP (the GitHub release page, download and install by hand)
-            // and BACK TO LOGIN (the link closed, the first page to choose another machine)
-            Key("⬇ UPDATE APP", Modifier.fillMaxWidth(), size = 14) {
-                activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse("https://github.com/markoboskoauroville/MANTRA_REMOTE_VNC_TAILSCALE/releases/latest")))
-            }
-            Key("← BACK TO LOGIN", Modifier.fillMaxWidth(), size = 14) { settingsOpen = false; s.phone = null; s.hangUp() }
         }
     }
 

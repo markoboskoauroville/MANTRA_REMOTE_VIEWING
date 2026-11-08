@@ -1,5 +1,7 @@
 # TAKEOVER: Mantra Remote VNC (Android)
 
+**State 8.11.2026, v40:** in ⚙, ⬇ UPDATE APP (with "NOW v<installed>") and ← BACK TO LOGIN (OTHER MACHINE) stand in one row at the top, under the title with the circled ✕.
+
 **State 8.11.2026, v39:** SCROLL moves the Mac's pointer to the finger first and turns the wheel at the finger (a tick every 20 px), so the window under the finger scrolls. L and R long-pressed are now click MODES (`clickLock`, one at a time, lit "TAP=L"/"TAP=R"): the button goes down at once where the finger lands, follows a moved finger, lets go on lifting (held at least 60 ms); a second finger releases it (zoom/pan). They no longer hold a button down; D is still the drag lock (`held`). Installed on the Pixel 7 and the Nothing (8.11.2026, 12:50); not yet tried by hand.
 
 **State 8.11.2026, v38:** the settings dialog (⚙) redesigned (Marko: "circle with X ... closing the dialogue", "back to login", "button to update the app ... GitHub page"): a circled ✕ at the top right closes it; at the bottom only two buttons, ⬇ UPDATE APP (opens the GitHub latest release page: download, install by hand) and ← BACK TO LOGIN (link closed, first page to pick another machine). QUIT APP, CLOSE MAC and BACK are gone. Built by GitHub Actions only.
