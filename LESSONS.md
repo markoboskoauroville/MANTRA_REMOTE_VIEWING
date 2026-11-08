@@ -59,3 +59,10 @@ v26 and v27 are signed by the GitHub build with the saved key; the Pixel's v25 h
 Uninstalled once, v27 installed; from now on every release installs over the last. Second cause of "cannot connect":
 the VM's Xvnc blacklists an address after 5 failed logins (TigerVNC BlacklistThreshold 5, timeout 10 s doubling, every
 attempt while blocked prolongs nothing but shows REFUSED); it cannot be changed live by vncconfig.
+
+## 8.11.2026: DOCK by keys was the source of the iTerm split panes
+⌥⌘D sent over VNC reached the Mac without its ⌥: iTerm took it as ⌘D, "split vertically", and every new pane started a
+Claude session (MAC_SES2, MAC_SES3, greyed because iTerm dims inactive panes). The Dock never changed. Also: on macOS 15
+the Dock ignores CoreDockSetAutoHideEnabled and System Events' "autohide of dock preferences"; only the setting written
+and `killall Dock` works. v36 asks the Dock Switcher (:8861 /dock) instead, and the keys are only a fallback.
+The VNC picture (5584x2361) puts each screen at its top-left in POINTS and draws it at its PIXEL size: the Retina at 2560,397.

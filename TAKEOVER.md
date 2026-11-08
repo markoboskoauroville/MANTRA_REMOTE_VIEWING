@@ -1,5 +1,11 @@
 # TAKEOVER: Mantra Remote VNC (Android)
 
+**State 8.11.2026, v36 (installed on both phones, tested on the Nothing Phone 2a; Marko: test only on the Nothing):**
+DOCK asks the Dock Switcher v15 (`/dock?show=1|0`) to switch the Dock's hiding off, then moves the picture to the bar at
+the zoom he has (switching to the BenQ if the bar is there), and the pointer onto the bar (not with VIEW on: view only
+sends no pointer). The second press hides the Dock again (only if it was hiding) and gives back the monitor, zoom, picture
+and pointer. MONITORS: the MacBook now at 2560,397 (picture 5584x2361). The Pixel 7's app has no Mac password saved.
+
 **State 5.11.2026, v33 (GitHub release, installed on the Pixel 7 and the Nothing Phone 2a):**
 - Row 1 (and the full-screen rail on the VM): ⌘TAB replaced by a pure ⌘; on the VM it taps Super alone = the VM dock (v28).
 - Machines list: the Pixel 7 and the Nothing Phone know each other from the start (v29); tested Nothing → VM, Nothing →
