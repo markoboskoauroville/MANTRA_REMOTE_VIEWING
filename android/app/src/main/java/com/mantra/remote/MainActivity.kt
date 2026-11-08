@@ -130,7 +130,7 @@ private fun helpText(label: String): String {
         l.contains("FPS") -> "Frames per second: how often a new picture of the Mac is fetched. Fewer is cheaper on mobile data. A tap steps to the next; a long press opens the list."
         l.removePrefix("C").trim() in setOf("FULL", "65K", "4096", "512", "64", "8", "B/W") || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
         l.startsWith("NEXT") || l == "⇥" -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first."
-        l == "DOCK" -> "A tap shows the Mac's Dock, the next tap hides it again (⌥⌘D, the Mac's own Dock hiding on and off). A long press: the Dock's apps on the whole phone, the Dock Switcher's own list. Tap one: the Mac switches to it, or starts it. A dot: open; lit: in front. ⌃⌃ MAC opens the square on the Mac itself; ✕ or Back closes."
+        l == "DOCK" -> "A tap shows the Mac's Dock, moves the picture down to it at the zoom you have, and puts the pointer on it; the next tap hides it again and gives the view and the pointer back. A long press: the Dock's apps on the whole phone, the Dock Switcher's own list. Tap one: the Mac switches to it, or starts it. A dot: open; lit: in front. ⌃⌃ MAC opens the square on the Mac itself; ✕ or Back closes."
         l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
@@ -833,6 +833,8 @@ private fun Live(s: Session) {
     var mouseMode by remember { mutableStateOf(s.prefs?.getBoolean("mouse_mode", false) ?: false) }
     LaunchedEffect(mouseMode) { s.prefs?.edit()?.putBoolean("mouse_mode", mouseMode)?.apply() }
     var mouseAt by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    // v35: what DOCK found before it moved the picture: given back on the second press
+    var dockBefore by remember { mutableStateOf<DockBefore?>(null) }
     // v24: the mouse button locked down: 0 none, 1 the left (L long press, or D), 4 the right (R long press)
     var held by remember { mutableIntStateOf(0) }
     val dragHeld = held == 1
@@ -1013,12 +1015,51 @@ private fun Live(s: Session) {
     // v17: DOCK shows or hides the Mac's own Dock, one press each way (Marko, 27.10.2026: "the macOS Dock is
     // auto-hiding, so the button should unhide it ... the button toggles"): ⌥⌘D, macOS's own "Turn Dock Hiding On/Off".
     // The phone's dock above moved to a long press on DOCK.
-    fun dockHiding() {
-        mods.value = emptySet(); releaseCmd()
-        travelling("DOCK ⇅")
+    // v35 (Marko, 8.11.2026: "dock button actually unhide the dock from macOS. And automatically scroll my view in
+    // whatever zoom level it is down to the dock and moves my mouse down to the dock. And when I press Dock again, it
+    // restores the view"): the Dock Switcher sets the Dock's own hiding (no ⌥⌘D, which the VNC keys did not always
+    // land) and says where the bar stands; the picture is moved, at the zoom it has, so the bar sits at the bottom of the
+    // phone, and the pointer goes onto the bar. The second press hides the Dock again (if it was hiding) and puts the
+    // zoom, the picture and the pointer back where they were. ⌥⌘D stays only for when the Dock Switcher does not answer.
+    fun dockKeys() {
         listOf(K_OPT, K_CMD, K_D).forEach { rfb.key(it, true) }
         listOf(K_D, K_CMD, K_OPT).forEach { rfb.key(it, false) }
         rfb.probe()
+    }
+    fun dockHiding() {
+        mods.value = emptySet(); releaseCmd()
+        val host = s.sisterHost.ifEmpty { MacFinder.MAC_TAILSCALE_IP }
+        val before = dockBefore
+        if (before == null) {
+            travelling("DOCK ↓")
+            Thread {
+                val was = MacSister.dock(host, null)
+                val d = if (was != null) MacSister.dock(host, true) else null
+                if (d == null) { view.post { travelling("DOCK ⇅ (KEYS)") }; dockKeys(); return@Thread }
+                view.post {
+                    dockBefore = DockBefore(zoom, pan, mouseAt, was!!.hidden)
+                    val fx = rect[0] + ((d.x + d.w / 2) * rect[2]).toFloat()
+                    val fBottom = rect[1] + ((d.y + d.h) * rect[3]).toFloat()
+                    // the bar's middle under the phone's middle, its bottom on the phone's bottom edge
+                    pan = clampPan(Offset(viewSize.width / 2f - baseX() - (fx - rect[0]) * scale(),
+                        viewSize.height - baseY() - (fBottom - rect[1]) * scale()))
+                    val mx = fx.roundToInt(); val my = (rect[1] + (d.y + d.h / 2) * rect[3]).roundToInt()
+                    mouseAt = mx to my
+                    Thread { rfb.pointer(mx, my, 0); rfb.probe() }.start()
+                    s.landed()
+                }
+            }.start()
+        } else {
+            travelling("DOCK ↑ VIEW BACK")
+            dockBefore = null
+            zoom = before.zoom; pan = before.pan; mouseAt = before.mouse
+            Thread {
+                if (MacSister.dock(host, !before.hidden) == null) dockKeys()
+                before.mouse?.let { (x, y) -> rfb.pointer(x, y, 0) }
+                rfb.probe()
+                view.post { s.landed() }
+            }.start()
+        }
     }
 
     // ☰ MENU: the action keys become the menu bar's (Marko, 26.10.2026: "one button, which will switch all of these
@@ -1681,3 +1722,6 @@ internal fun TypingField(onText: (String) -> Unit, onBackspace: () -> Unit) {
         modifier = Modifier.fillMaxWidth().size(1.dp).focusRequester(focus),
     )
 }
+
+/** v35: the view and the Dock's hiding as they were before DOCK moved them. */
+data class DockBefore(val zoom: Float, val pan: Offset, val mouse: Pair<Int, Int>?, val hidden: Boolean)

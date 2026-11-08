@@ -64,6 +64,20 @@ object MacSister {
         j.optBoolean("ok") to j.optString("note")
     }.getOrNull()
 
+    /**
+     * v35 (Marko, 8.11.2026: "dock button actually unhide the dock"): the Dock's own hiding set on the Mac (show true:
+     * stays shown; false: hides itself again; null: only asked), and where its bar stands, as fractions of its screen.
+     */
+    data class DockState(val hidden: Boolean, val x: Double, val y: Double, val w: Double, val h: Double)
+    fun dock(host: String, show: Boolean?): DockState? =
+        get(host, "/dock" + (show?.let { if (it) "?show=1" else "?show=0" } ?: ""), 4000)?.let { b ->
+            runCatching {
+                val j = JSONObject(String(b))
+                if (!j.optBoolean("ok")) null
+                else DockState(j.optBoolean("hidden"), j.optDouble("x", 0.25), j.optDouble("y", 0.94), j.optDouble("w", 0.5), j.optDouble("h", 0.06))
+            }.getOrNull()
+        }
+
     /** Switch to the app, or start it: true when the Mac did it. */
     fun open(host: String, id: String): Boolean = get(host, "/open?id=" + URLEncoder.encode(id, "UTF-8"), 4000) != null
 }
