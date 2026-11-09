@@ -255,3 +255,9 @@ update the app and back to login should be at the top
 **Status:** saved first.
 **Status (8.11.2026):** v40: both buttons in one row at the top of ⚙; UPDATE APP shows NOW v<installed version>.
 **Status (8.11.2026, 13:05):** v40 installed on the Pixel 7 and the Nothing over Tailscale (versionName=40 read back on both).
+
+## 9.11.2026 (Marko, word for word, testing on his Nothing Phone)
+
+how I want to change my Mantra Remote: mouse actions. When I click the mouse to enable the mouse, and when I lock left or right, this is what's happening: when I tap on the screen with locked left, the circle is jumping to that position and after 1 second it clicks automatically.
+**Status:** saved first.
+**Status (9.11.2026):** v41: L/R long press = real lock (button held down, same as D); a locked finger moves the pointer relatively, a tap does nothing, a long press on the key lets go. MON 1/2 derived from the framebuffer (5584x1964 and 5584x2361).

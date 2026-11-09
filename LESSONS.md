@@ -66,3 +66,6 @@ Claude session (MAC_SES2, MAC_SES3, greyed because iTerm dims inactive panes). T
 the Dock ignores CoreDockSetAutoHideEnabled and System Events' "autohide of dock preferences"; only the setting written
 and `killall Dock` works. v36 asks the Dock Switcher (:8861 /dock) instead, and the keys are only a fallback.
 The VNC picture (5584x2361) puts each screen at its top-left in POINTS and draws it at its PIXEL size: the Retina at 2560,397.
+
+## 9.11.2026: the locked-button "jump and click"
+v39 turned L/R long press into a click MODE: finger down teleported the pointer to the finger and pressed the button, lifting released it = an unasked click at the tap. No dwell timer exists in the code (grep postDelayed: only redial, dock, landed). v41 removes click mode: a long press locks the button down (toggleHold), the finger moves the ring relatively, a tap does nothing, a second long press releases. Monitor layout is no longer hard-coded: layoutMonitors(fbW, fbH) puts the Retina at y = fbH-1964 (0 when tops are level), so MON 1/2 survive an arrangement change.

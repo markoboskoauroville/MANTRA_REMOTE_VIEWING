@@ -1,5 +1,7 @@
 # TAKEOVER: Mantra Remote VNC (Android)
 
+**State 9.11.2026, v41:** L and R long-pressed LOCK the button down (like D, `held`; label LOCKED): the finger moves the pointer relatively from the ring, no jump, a tap does nothing, a long press on the key releases; click mode (`clickLock`, v39) is gone. MONITORS is derived from the picture size by `layoutMonitors` (Retina at y = fbH-1964: 5584x1964 tops level, 5584x2361 the old 397 offset).
+
 **State 8.11.2026, v40:** in ⚙, ⬇ UPDATE APP (with "NOW v<installed>") and ← BACK TO LOGIN (OTHER MACHINE) stand in one row at the top, under the title with the circled ✕.
 
 **State 8.11.2026, v39:** SCROLL moves the Mac's pointer to the finger first and turns the wheel at the finger (a tick every 20 px), so the window under the finger scrolls. L and R long-pressed are now click MODES (`clickLock`, one at a time, lit "TAP=L"/"TAP=R"): the button goes down at once where the finger lands, follows a moved finger, lets go on lifting (held at least 60 ms); a second finger releases it (zoom/pan). They no longer hold a button down; D is still the drag lock (`held`). Installed on the Pixel 7 and the Nothing (8.11.2026, 12:50); not yet tried by hand.

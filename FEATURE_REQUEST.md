@@ -683,3 +683,6 @@ strand you. Earn it.
 | 2026-08-15 | **D2 = SSH only. D3 = Native Android/Kotlin. D4 = Apple built-in.** All decisions closed. STACK section added. Ready to build F01. |
 | 2026-08-15 | **Phase G — THE BIG SCREEN** added (F39–F44). scrcpy-without-ADB ruled out as architecturally impossible. D5 opened + scrcpy diagnostic. Eye strain recorded as a hard design constraint. |
 | 2026-08-15 | **No internet at Nova TV edit stations.** F39–F41 rescoped to travel only. SRT/NDI assessed and ruled out (wrong layer + need an installed receiver; NDI also proprietary). **F45–F50 added: USB tethering + MJPEG to the browser.** Binding constraint recorded as *no software may be installed*, not bandwidth. |
+
+### 9.11.2026, v41: mouse lock and monitor layout (Marko's request in momentaryupdates.md)
+Locked L/R = button held (drag lock), relative finger movement, tap does nothing, long press on the key releases. MON 1/2 from the framebuffer size (both Mac arrangements). Status: TEST.
