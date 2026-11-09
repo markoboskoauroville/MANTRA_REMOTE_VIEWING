@@ -266,3 +266,4 @@ how I want to change my Mantra Remote: mouse actions. When I click the mouse to 
 ## 9.11.2026, later (Marko, after testing v41)
 The remote mouse is not working as I was imagining. Imagine it like this: L is locked and I click on the screen. There is a sequence of actions, the same as tapping/pressing that button while it's in the unlocked state.
 **Status (9.11.2026):** v42: L/R lock = sticky click mode: a tap clicks at the ring (no jump, no delay), movement moves the ring relatively; D stays the held drag.
+**Status (9.11.2026):** v42 installed on the Nothing and the Pixel 7 (versionName=42); not yet tried by hand.
