@@ -1,6 +1,8 @@
 # TAKEOVER: Mantra Remote VNC (Android)
 
-**State 9.11.2026, v41:** L and R long-pressed LOCK the button down (like D, `held`; label LOCKED): the finger moves the pointer relatively from the ring, no jump, a tap does nothing, a long press on the key releases; click mode (`clickLock`, v39) is gone. MONITORS is derived from the picture size by `layoutMonitors` (Retina at y = fbH-1964: 5584x1964 tops level, 5584x2361 the old 397 offset).
+**State 9.11.2026, v42 (replaces v41's lock):** L/R long-pressed = sticky CLICK MODE (`clickLock`, TAP=L/TAP=R, tap the lit key or long-press again to end): one-finger movement moves the ring relatively, a tap (<250 ms, <10 px) = one click at the ring, no jump; D stays the held drag. MONITORS derived as in v41.
+
+**State 9.11.2026, v41 (lock part superseded by v42):** L and R long-pressed LOCK the button down (like D, `held`; label LOCKED): the finger moves the pointer relatively from the ring, no jump, a tap does nothing, a long press on the key releases; click mode (`clickLock`, v39) is gone. MONITORS is derived from the picture size by `layoutMonitors` (Retina at y = fbH-1964: 5584x1964 tops level, 5584x2361 the old 397 offset).
 
 **State 8.11.2026, v40:** in ⚙, ⬇ UPDATE APP (with "NOW v<installed>") and ← BACK TO LOGIN (OTHER MACHINE) stand in one row at the top, under the title with the circled ✕.
 

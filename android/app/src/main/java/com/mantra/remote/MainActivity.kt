@@ -964,10 +964,16 @@ private fun Live(s: Session) {
             rfb.probe()
         }.start()
     }
-    fun toggleDrag() { if (clickLock != 0) clickLock = 0; toggleHold(1) }
-    // v41 (Marko, 9.11.2026): L or R long-pressed LOCKS the button down (a drag lock); a finger then moves the pointer
-    // relatively, from where the ring stands, never jumping; a tap does nothing; a long press on the key lets go
-    fun toggleLock(button: Int) { clickLock = 0; toggleHold(button) }
+    fun toggleDrag() { clickLock = 0; toggleHold(1) }
+    // v42 (Marko, 9.11.2026): L or R long-pressed = a STICKY CLICK MODE (not a held button): every tap on the picture is
+    // one click at the ring's current place; a finger moves the ring relatively. D stays the held drag.
+    fun toggleLock(button: Int) {
+        if (clickLock != button && viewOnly) { travelling("VIEW ONLY: NO CLICK"); return }
+        if (held != 0) toggleHold(held)
+        clickLock = if (clickLock == button) 0 else button
+        val name = if (button == 1) "LEFT" else "RIGHT"
+        travelling(if (clickLock != 0) "$name CLICK ON: TAP CLICKS" else "$name CLICK OFF", picture = true)
+    }
     fun setMouse(on: Boolean) { mouseMode = on; if (on) { scrollMode = false; viewOnly = false } else { clickLock = 0; if (held != 0) toggleHold(held) } }
     LaunchedEffect(Unit) { if (mouseMode && viewOnly) viewOnly = false }
     fun tapKey(k: Int) {
@@ -1204,7 +1210,7 @@ private fun Live(s: Session) {
         modifier
             .background(Color.Black)
             .onSizeChanged { viewSize = it }
-            .pointerInput(rect.contentHashCode(), scrollMode, viewOnly, mouseMode, held) {
+            .pointerInput(rect.contentHashCode(), scrollMode, viewOnly, mouseMode, held, clickLock) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     val start = down.position
@@ -1217,7 +1223,8 @@ private fun Live(s: Session) {
                     var fingers = 1          // the most fingers down at once in this gesture
                     var multiTravel = 0f     // how far two or three fingers went: little = a tap, a click in MOUSE mode
                     val mouse = mouseMode && !viewOnly && !scrollMode
-                    var relAt = if (held != 0) mouseAt else null
+                    var relAt = if (held != 0 || clickLock != 0) mouseAt else null
+                    var maxD = 0f
                     // v39: SCROLL: the pointer goes to the finger first, so the window under it is the one that turns
                     if (scrollMode && !viewOnly) { val (sx, sy) = toFb(start); mouseAt = sx to sy; rfb.pointer(sx, sy, 0) }
                     while (true) {
@@ -1255,6 +1262,7 @@ private fun Live(s: Session) {
                         val c = pressed[0]
                         val p = c.position
                         last = p
+                        maxD = maxOf(maxD, (p - start).getDistance())
                         if (!moved && (p - start).getDistance() > 24f) moved = true
                         if (multi) { c.consume(); continue }
                         if (viewOnly) {
@@ -1265,14 +1273,14 @@ private fun Live(s: Session) {
                         if (mouse) {
                             // MOUSE: the pointer follows the finger, no button; not in the first 80 ms, so the first finger of
                             // a two- or three-finger tap leaves the pointer where it is
-                            if (held != 0) {
-                                // v41: a button is locked down: the finger moves the pointer RELATIVELY, no jump to the finger
+                            if (held != 0 || clickLock != 0) {
+                                // v41/42: a button is locked down: the finger moves the pointer RELATIVELY, no jump to the finger
                                 val cur = relAt ?: mouseAt
                                 if (cur != null && System.currentTimeMillis() - t0 > 80) {
                                     val d = c.positionChange() / scale()
                                     val nx = (cur.first + d.x.roundToInt()).coerceIn(rect[0], rect[0] + rect[2] - 1)
                                     val ny = (cur.second + d.y.roundToInt()).coerceIn(rect[1], rect[1] + rect[3] - 1)
-                                    relAt = nx to ny; mouseAt = nx to ny; rfb.pointer(nx, ny, held)
+                                    relAt = nx to ny; mouseAt = nx to ny; rfb.pointer(nx, ny, held)   // clickLock: held is 0, only the ring moves
                                 }
                             }
                             else if (moved || System.currentTimeMillis() - t0 > 80) { val at = toFb(p); mouseAt = at; rfb.pointer(at.first, at.second, 0) }
@@ -1304,7 +1312,15 @@ private fun Live(s: Session) {
                     val quick = System.currentTimeMillis() - t0 < 400
                     if (mouse) {
                         // MOUSE: a short tap of three fingers clicks, of two fingers right-clicks, where the pointer is
-                        if (held != 0 && !multi) return@awaitEachGesture   // v41: locked: lifting or tapping does nothing
+                        if (held != 0 && !multi) return@awaitEachGesture   // D drag: lifting or tapping does nothing
+                        if (clickLock != 0 && !multi) {
+                            // v42: a tap (under 250 ms, under 10 px) = one click of the lit button at the ring, no jump
+                            if (System.currentTimeMillis() - t0 < 250 && maxD < 10f) {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                mouseClick(clickLock)
+                            }
+                            return@awaitEachGesture
+                        }
                         if (!multi) { val to = toFb(last); mouseAt = to; rfb.pointer(to.first, to.second, 0); return@awaitEachGesture }
                         val at = mouseAt
                         if (at != null && System.currentTimeMillis() - t0 < 400 && multiTravel < 60f) {
@@ -1450,8 +1466,8 @@ private fun Live(s: Session) {
         // v17: 🖱 beside ⌨ (Marko, 27.10.2026: "a keyboard icon ... and next to it there must be a mouse icon")
         Key("🖱", modifier, active = mouseMode, size = 24, padH = ROW_PAD) { setMouse(!mouseMode) }
         if (mouseMode) {
-            Key("L", Modifier.weight(0.6f), active = held == 1, size = 18, sub = if (held == 1) "LOCKED" else "CLICK", padH = 2, onLongClick = { toggleLock(1) }) { mouseClick(1) }
-            Key("R", Modifier.weight(0.6f), active = held == 4, size = 18, sub = if (held == 4) "LOCKED" else "CLICK", padH = 2, onLongClick = { toggleLock(4) }) { mouseClick(4) }
+            Key("L", Modifier.weight(0.6f), active = clickLock == 1, size = 18, sub = if (clickLock == 1) "TAP=L" else "CLICK", padH = 2, onLongClick = { toggleLock(1) }) { if (clickLock == 1) toggleLock(1) else mouseClick(1) }
+            Key("R", Modifier.weight(0.6f), active = clickLock == 4, size = 18, sub = if (clickLock == 4) "TAP=R" else "CLICK", padH = 2, onLongClick = { toggleLock(4) }) { if (clickLock == 4) toggleLock(4) else mouseClick(4) }
             Key("D", Modifier.weight(0.6f), active = dragHeld, size = 18, sub = "DRAG", padH = 2) { toggleDrag() }
         }
     }
@@ -1626,8 +1642,8 @@ private fun Live(s: Session) {
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
                 RailKey("MOUSE", null, if (mouseMode) RailState.ON else RailState.OFF) { setMouse(!mouseMode) }
                 if (mouseMode) {
-                    RailKey("L", if (held == 1) "LOCKED" else "CLICK", if (held == 1) RailState.ON else RailState.OFF, onLongClick = { toggleLock(1) }) { mouseClick(1) }
-                    RailKey("R", if (held == 4) "LOCKED" else "CLICK", if (held == 4) RailState.ON else RailState.OFF, onLongClick = { toggleLock(4) }) { mouseClick(4) }
+                    RailKey("L", if (clickLock == 1) "TAP=L" else "CLICK", if (clickLock == 1) RailState.ON else RailState.OFF, onLongClick = { toggleLock(1) }) { if (clickLock == 1) toggleLock(1) else mouseClick(1) }
+                    RailKey("R", if (clickLock == 4) "TAP=R" else "CLICK", if (clickLock == 4) RailState.ON else RailState.OFF, onLongClick = { toggleLock(4) }) { if (clickLock == 4) toggleLock(4) else mouseClick(4) }
                     RailKey("D", "DRAG", if (dragHeld) RailState.ON else RailState.OFF) { toggleDrag() }
                 }
                 RailKey("NEXT", "TAB", RailState.OFF) { nextTab() }

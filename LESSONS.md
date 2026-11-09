@@ -69,3 +69,6 @@ The VNC picture (5584x2361) puts each screen at its top-left in POINTS and draws
 
 ## 9.11.2026: the locked-button "jump and click"
 v39 turned L/R long press into a click MODE: finger down teleported the pointer to the finger and pressed the button, lifting released it = an unasked click at the tap. No dwell timer exists in the code (grep postDelayed: only redial, dock, landed). v41 removes click mode: a long press locks the button down (toggleHold), the finger moves the ring relatively, a tap does nothing, a second long press releases. Monitor layout is no longer hard-coded: layoutMonitors(fbW, fbH) puts the Retina at y = fbH-1964 (0 when tops are level), so MON 1/2 survive an arrangement change.
+
+## 9.11.2026: "lock" means a sticky click mode, not a held button
+v41 made L/R hold the button down; Marko meant that while L is lit every tap is one left click, as pressing L once. v42: tap (<250 ms, <10 px) = mouseClick at the ring's current place; moving only moves the ring relatively. Ask what a "lock" does before choosing between held and sticky.
