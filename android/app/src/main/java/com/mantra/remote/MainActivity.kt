@@ -649,7 +649,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
             // download the latest version" ... "only from the login screen, not inside the remote session"): only here.
             Column(Modifier.weight(1f).clickable {
                 activity?.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse("https://github.com/markoboskoauroville/MANTRA_REMOTE_VNC_TAILSCALE/releases/latest")))
+                    android.net.Uri.parse("https://github.com/markoboskoauroville/MANTRA_REMOTE_VIEWING/releases/latest")))
             }) {
                 T("MANTRA REMOTE VIEWING ▊", Amber, 26, bold = true)
                 T("v" + BuildConfig.VERSION_NAME + "  ·  tap for the latest version", AmberDim, 13)
@@ -1516,7 +1516,7 @@ private fun Live(s: Session) {
                 val current = remember { runCatching { activity.packageManager.getPackageInfo(activity.packageName, 0).versionName }.getOrNull() ?: "?" }
                 Key("⬇ UPDATE APP", Modifier.weight(1f), size = 14, sub = "NOW v$current") {
                     activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse("https://github.com/markoboskoauroville/MANTRA_REMOTE_VNC_TAILSCALE/releases/latest")))
+                        android.net.Uri.parse("https://github.com/markoboskoauroville/MANTRA_REMOTE_VIEWING/releases/latest")))
                 }
                 Key("← BACK TO LOGIN", Modifier.weight(1f), size = 14, sub = "OTHER MACHINE") { settingsOpen = false; s.phone = null; s.hangUp() }
             }

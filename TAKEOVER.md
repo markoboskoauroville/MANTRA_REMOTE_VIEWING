@@ -1,5 +1,7 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**Renamed 13.11.2026:** markoboskoauroville/MANTRA_REMOTE_VNC_TAILSCALE is now **markoboskoauroville/MANTRA_REMOTE_VIEWING** (Marko). Done by Queen.
+
 **Renamed 13.11.2026:** MANTRA REMOTE VNC is now **MANTRA REMOTE VIEWING** (Marko). Done by Queen.
 
 **Renamed 13.11.2026:** Mantra Remote VNC is now **Mantra Remote Viewing** (Marko). Done by Queen.
