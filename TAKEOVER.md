@@ -6,6 +6,13 @@
 
 **Renamed 13.11.2026:** Mantra Remote VNC is now **Mantra Remote Viewing** (Marko). Done by Queen.
 
+**State 13.11.2026, v48:** MOUSE (🖱): a one-finger tap (under 350 ms, not moved) now left-clicks where the finger touched,
+as a real mouse; a finger moved on still only moves the pointer; two/three-finger taps and L/R/D unchanged. Typing: the hidden
+TypingField forwards keys a keyboard sends as KEYS (arrows, Tab, Esc, Enter, Backspace, Delete, Home/End, PgUp/PgDn, Insert,
+F1-F12, with the Ctrl/Alt/Shift that keyboard held) to the machine as X11 keysyms (onPreviewKeyEvent, ANDROID_TO_KEYSYM). Before,
+the field moved its own caret on an arrow and nothing left the phone: TTT's arrows did nothing in Claude Code on the Oracle VM.
+Compiled in the cloud session; not yet tried on the phone.
+
 **State 13.11.2026, v47:** LOGIN no longer types into whatever has the focus. It asks the Mac's Star API
 (`POST http://<mac tailscale>:8863/login-dialog {"password"}`, X-Mantra-Token = files/door.token) and Macro Recorder v23
 (`login-dialog:` inbox, app/Dialog.swift) finds every password dialog through Accessibility, in front or not (keychain

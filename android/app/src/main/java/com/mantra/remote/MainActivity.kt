@@ -56,6 +56,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -127,7 +129,7 @@ private fun helpText(label: String): String {
         l.startsWith("MON 2") -> "Shows monitor 2, the MacBook Pro's own screen. Only this monitor's picture travels to the phone."
         l == "✕" -> "Closes the link to the Mac and goes back to the settings page."
         l.contains("KEYS") || l == "⌨" -> "Opens the phone's keyboard. What you type is typed on the Mac."
-        l == "🖱" || l == "MOUSE" -> "MOUSE: while it is lit, one finger moves the Mac's pointer to where it touches, without clicking. Three fingers tapped together click, two fingers tapped together right-click, where the pointer stands. Spreading, pinching and three-finger panning still work."
+        l == "🖱" || l == "MOUSE" -> "MOUSE: while it is lit, a tap of one finger clicks where it touches; a finger moved on moves the pointer without clicking. Three fingers tapped together click, two fingers tapped together right-click, where the pointer stands. Spreading, pinching and three-finger panning still work."
         l == "L" -> "The left mouse button: a short press clicks where the pointer stands; a long press lights it (TAP=L): then every tap on the screen left-clicks at once where the finger touches (a finger moved on is a drag). Lighting R puts L out; another long press switches it off."
         l == "R" -> "The right mouse button: a short press right-clicks where the pointer stands; a long press lights it (TAP=R): then every tap on the screen right-clicks at once where the finger touches. Lighting L puts R out; another long press switches it off."
         l == "D" -> "DRAG: the first press holds the Mac's left button down where the pointer stands; moving the pointer then drags; the second press lets the button go (lit green while held)."
@@ -1328,7 +1330,17 @@ private fun Live(s: Session) {
                             }
                             return@awaitEachGesture
                         }
-                        if (!multi) { val to = toFb(last); mouseAt = to; rfb.pointer(to.first, to.second, 0); return@awaitEachGesture }
+                        if (!multi) {
+                            // v48 (Marko, 13.11.2026: "when mouse is active, tapping is actually clicking"): a one-finger
+                            // tap (short, not moved) clicks left where the finger touched, as a real mouse would; a
+                            // finger moved on only moves the pointer, as before
+                            val to = toFb(last); mouseAt = to
+                            if (!moved && System.currentTimeMillis() - t0 < 350) {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                mouseClick(1)
+                            } else rfb.pointer(to.first, to.second, 0)
+                            return@awaitEachGesture
+                        }
                         val at = mouseAt
                         if (at != null && System.currentTimeMillis() - t0 < 400 && multiTravel < 60f) {
                             val button = if (fingers >= 3) 1 else 4
@@ -1482,7 +1494,13 @@ private fun Live(s: Session) {
         }.start()
     }
     val typing: @Composable () -> Unit = {
-        if (keyboard) TypingField(onText = { typeText(it) }, onBackspace = { tapKey(K_BACKSPACE) })
+        if (keyboard) TypingField(onText = { typeText(it) }, onBackspace = { tapKey(K_BACKSPACE) }, onKey = { k, held ->
+            // v48: a key the phone's keyboard sends as a key (arrows, Tab, Esc, Home, End...), with the Ctrl/Alt/Shift
+            // that keyboard held, goes to the machine as that key (Marko, 13.11.2026: TTT's arrows did nothing)
+            held.forEach { rfb.key(it, true) }
+            tapKey(k)
+            held.reversed().forEach { rfb.key(it, false) }
+        })
     }
     val toggles: @Composable RowScope.(Modifier) -> Unit = { modifier ->
         // FPS first, the keyboard where FPS was, drawn as a keyboard (Marko, 26.10.2026)
@@ -1849,8 +1867,23 @@ private fun ColumnScope.RailKey(word: String, whisper: String?, state: RailState
  * The phone's own keyboard. The field always holds one space; what is typed after it is sent, a delete that eats
  * the space is a backspace, and the field goes back to its one space.
  */
+// v48: Android key codes a keyboard (TTT, Hacker's Keyboard, a Bluetooth one) sends as keys, not text, and the X11
+// keysyms they are on the machine. Without this the hidden field moved its own caret on an arrow and nothing left the phone.
+private val ANDROID_TO_KEYSYM by lazy {
+    mapOf(
+        AndroidKeyEvent.KEYCODE_DPAD_LEFT to K_LEFT, AndroidKeyEvent.KEYCODE_DPAD_RIGHT to K_RIGHT,
+        AndroidKeyEvent.KEYCODE_DPAD_UP to K_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN to K_DOWN,
+        AndroidKeyEvent.KEYCODE_TAB to K_TAB, AndroidKeyEvent.KEYCODE_ESCAPE to K_ESC,
+        AndroidKeyEvent.KEYCODE_ENTER to K_RETURN, AndroidKeyEvent.KEYCODE_NUMPAD_ENTER to K_RETURN,
+        AndroidKeyEvent.KEYCODE_DEL to K_BACKSPACE, AndroidKeyEvent.KEYCODE_FORWARD_DEL to 0xffff,
+        AndroidKeyEvent.KEYCODE_MOVE_HOME to 0xff50, AndroidKeyEvent.KEYCODE_MOVE_END to 0xff57,
+        AndroidKeyEvent.KEYCODE_PAGE_UP to 0xff55, AndroidKeyEvent.KEYCODE_PAGE_DOWN to 0xff56,
+        AndroidKeyEvent.KEYCODE_INSERT to 0xff63,
+    ) + (0..11).associate { (AndroidKeyEvent.KEYCODE_F1 + it) to (0xffbe + it) }
+}
+
 @Composable
-internal fun TypingField(onText: (String) -> Unit, onBackspace: () -> Unit) {
+internal fun TypingField(onText: (String) -> Unit, onBackspace: () -> Unit, onKey: (Int, List<Int>) -> Unit = { _, _ -> }) {
     val base = TextFieldValue(" ", TextRange(1))
     var value by remember { mutableStateOf(base) }
     val focus = remember { FocusRequester() }
@@ -1871,7 +1904,21 @@ internal fun TypingField(onText: (String) -> Unit, onBackspace: () -> Unit) {
             capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false,
             keyboardType = KeyboardType.Ascii, imeAction = ImeAction.None,
         ),
-        modifier = Modifier.fillMaxWidth().size(1.dp).focusRequester(focus),
+        modifier = Modifier.fillMaxWidth().size(1.dp).focusRequester(focus).onPreviewKeyEvent { e ->
+            val ne = e.nativeKeyEvent
+            val k = ANDROID_TO_KEYSYM[ne.keyCode] ?: return@onPreviewKeyEvent false
+            // the down goes out (each repeat too, so a held arrow keeps moving); the up is swallowed with it
+            if (ne.action == AndroidKeyEvent.ACTION_DOWN) {
+                val held = buildList {
+                    if (ne.isCtrlPressed) add(K_CTRL)
+                    if (ne.isAltPressed) add(K_OPT)
+                    if (ne.isShiftPressed) add(K_SHIFT)
+                }
+                onKey(k, held)
+            }
+            value = base
+            true
+        },
     )
 }
 

@@ -1,5 +1,10 @@
 # Momentary updates: Marko's requests, word for word, saved before any code
 
+**13.11.2026, v48:**
+> "Second update is in remote viewer I need mouse to work normally. So I click mouse, when mouse is active, tapping is actually clicking."
+> (with the TTT request: "When I'm in Claude Code in terminal inside Virtual Machine of Oracle, when I'm using my TTT, arrows do not work ... adapt the signals so it works in any environment, my arrows.")
+
+
 **25.10.2026 ~18:05 (session "ableton live remote control", hub):**
 > Now this session will be for something else. I'm coming home in 5 to 10 minutes, so you need to prepare everything. I'm going to attach my phone for debugging purposes.
 > For the first time, we need to create an application for remote controlling the computer. There is a repository somewhere, so please find it and clone it. Check the code, and when I plug in the phone, we will have a Wi-Fi connection and an internet connection.
