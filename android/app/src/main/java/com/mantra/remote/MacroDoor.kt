@@ -125,7 +125,7 @@ object MacroDoor {
         }
         val r = route.removePrefix("/api").ifEmpty { "/api" }
         when {
-            route == "/health" -> reply(out, 200, "application/json", JSONObject().put("app", "mantra-remote").put("name", "Mantra Remote VNC")
+            route == "/health" -> reply(out, 200, "application/json", JSONObject().put("app", "mantra-remote").put("name", "Mantra Remote Viewing")
                 .put("version", BuildConfig.VERSION_NAME.toIntOrNull() ?: 0).put("pid", android.os.Process.myPid()).toString().toByteArray())
             route == "/api" -> reply(out, 200, "application/json", JSONObject().put("app", "mantra-remote").put("version", BuildConfig.VERSION_NAME)
                 .put("actions", JSONArray()

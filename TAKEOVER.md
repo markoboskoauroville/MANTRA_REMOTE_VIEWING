@@ -1,4 +1,6 @@
-# TAKEOVER: Mantra Remote VNC (Android)
+# TAKEOVER: Mantra Remote Viewing (Android)
+
+**Renamed 13.11.2026:** Mantra Remote VNC is now **Mantra Remote Viewing** (Marko). Done by Queen.
 
 **State 9.11.2026, v42 (replaces v41's lock):** L/R long-pressed = sticky CLICK MODE (`clickLock`, TAP=L/TAP=R, tap the lit key or long-press again to end): one-finger movement moves the ring relatively, a tap (<250 ms, <10 px) = one click at the ring, no jump; D stays the held drag. MONITORS derived as in v41.
 
