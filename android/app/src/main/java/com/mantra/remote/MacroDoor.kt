@@ -145,6 +145,9 @@ object MacroDoor {
 
     /** The door's token: files/door.token, put there by `mremote keep` (run-as); never shown, never logged. */
     private fun token(): String = runCatching { java.io.File(app!!.filesDir, "door.token").readText().trim() }.getOrDefault("")
+    /** v47: the same token for the Mac's Star API (LOGIN); "" when `mremote keep` never gave it to this phone. */
+    fun token(ctx: android.content.Context?): String =
+        runCatching { java.io.File(ctx!!.filesDir, "door.token").readText().trim() }.getOrDefault("")
 
     private fun reply(out: java.io.OutputStream, code: Int, type: String, data: ByteArray) {
         out.write("HTTP/1.1 $code OK\r\nContent-Type: $type\r\nContent-Length: ${data.size}\r\nConnection: close\r\n\r\n".toByteArray())

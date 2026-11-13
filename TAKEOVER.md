@@ -6,6 +6,14 @@
 
 **Renamed 13.11.2026:** Mantra Remote VNC is now **Mantra Remote Viewing** (Marko). Done by Queen.
 
+**State 13.11.2026, v47:** LOGIN no longer types into whatever has the focus. It asks the Mac's Star API
+(`POST http://<mac tailscale>:8863/login-dialog {"password"}`, X-Mantra-Token = files/door.token) and Macro Recorder v23
+(`login-dialog:` inbox, app/Dialog.swift) finds every password dialog through Accessibility, in front or not (keychain
+prompts of SecurityAgent, admin prompts, sheets; never a web page's field), fills it, presses ALWAYS ALLOW, else ALLOW /
+OK / UNLOCK, and answers all of them in one tap. The answer shows 6 s on the line above the keys ("LOGIN: ALWAYS ALLOW
+PRESSED · 2 DIALOGS", red when one stayed open). No dialog on the Mac (the lock screen) or no answer from the Star API:
+typed + Return as before. Needs on the Mac: Macro Recorder v23 installed, STAR_API pulled and `star serve` restarted.
+
 **State 9.11.2026, v42 (replaces v41's lock):** L/R long-pressed = sticky CLICK MODE (`clickLock`, TAP=L/TAP=R, tap the lit key or long-press again to end): one-finger movement moves the ring relatively, a tap (<250 ms, <10 px) = one click at the ring, no jump; D stays the held drag. MONITORS derived as in v41.
 
 **State 9.11.2026, v41 (lock part superseded by v42):** L and R long-pressed LOCK the button down (like D, `held`; label LOCKED): the finger moves the pointer relatively from the ring, no jump, a tap does nothing, a long press on the key releases; click mode (`clickLock`, v39) is gone. MONITORS is derived from the picture size by `layoutMonitors` (Retina at y = fbH-1964: 5584x1964 tops level, 5584x2361 the old 397 offset).

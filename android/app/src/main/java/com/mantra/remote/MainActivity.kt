@@ -136,7 +136,7 @@ private fun helpText(label: String): String {
         l.removePrefix("C").trim() in setOf("FULL", "65K", "4096", "512", "64", "8", "B/W") || l == "COL" -> "Colours: how many the Mac sends. Fewer colours cost far less mobile data: 8 colours or black and white about a sixth of full colour. A tap steps to the next; a long press opens the list."
         l.startsWith("NEXT") || l == "⇥" -> "The next tab of the app in front: Chrome, iTerm, Safari, Finder (⌘⇧] on the Mac, the same shortcut in all of them). Tap again and again to go through the tabs; after the last one it starts at the first."
         l == "DOCK" -> "A tap shows the Mac's Dock, moves the picture down to it at the zoom you have, and puts the pointer on it; the next tap hides it again and gives the view and the pointer back. A long press: the Dock's apps on the whole phone, the Dock Switcher's own list. Tap one: the Mac switches to it, or starts it. A dot: open; lit: in front. ⌃⌃ MAC opens the square on the Mac itself; ✕ or Back closes."
-        l == "LOGIN" -> "Types your Mac password from the settings, then Return: for any password box that pops up on the Mac."
+        l == "LOGIN" -> "Finds every password dialog on the Mac (keychain, admin), in front or not, enters your Mac password from the settings and presses ALWAYS ALLOW, else OK. With no dialog (the lock screen) it types the password and Return."
         l.contains("LANDSCAPE") -> "Turns the app sideways: the Mac on the left, the keys on the right."
         l.contains("PORTRAIT") -> "Turns the app upright again: the Mac in the middle, the keys below."
         l == "⚙" -> "Settings: the numbers of the status line with their meaning, the frames per second, the colours, the status line at the top on or off, the three rows of keys on or off (with all three off, ⚙ stays see-through over the picture), and ✕ QUIT APP, which closes the link and quits the app (Tailscale stays on)."
@@ -318,6 +318,11 @@ private class Session : Rfb.Listener {
         }, "mac-keys").start()
     }
 
+    /** v47: a short answer from the Mac (LOGIN), shown on the travelling line for 6 s, red when it went wrong. */
+    var noteText by mutableStateOf("")
+    var noteBad by mutableStateOf(false)
+    var noteAt by mutableLongStateOf(0L)
+    fun note(text: String, bad: Boolean) { noteText = text; noteBad = bad; noteAt = System.currentTimeMillis() }
     fun landed() {
         if (pressed.isEmpty()) return
         android.util.Log.i("MantraRemote", "landed: $pressed in ${System.currentTimeMillis() - pressedAt} ms (${if (sisterOk) "the Mac saw it" else "picture probe"})")
@@ -1027,8 +1032,10 @@ private fun Live(s: Session) {
     val travelLine: @Composable (Modifier) -> Unit = { modifier ->
         Box(modifier.height(16.dp), contentAlignment = Alignment.Center) {
             if (s.pressed.isNotEmpty()) T(if (late) "${s.pressed}  NOT LANDED YET" else "${s.pressed}  →  $where", if (late) RedAlert else AmberGlow, 11, oneLine = true)
+            else if (s.noteText.isNotEmpty()) T(s.noteText, if (s.noteBad) RedAlert else AmberGlow, 11, oneLine = true)
         }
     }
+    LaunchedEffect(s.noteAt) { if (s.noteAt > 0) { delay(6000); s.noteText = "" } }
 
     // DOCK: the Dock's apps on the whole phone, picked here, switched or started on the Mac (Marko, 26.10.2026: "build a
     // remote controller for my dock, so I'm not waiting for the dock and trying to find it on screen")
@@ -1448,11 +1455,31 @@ private fun Live(s: Session) {
         }
     }
     fun typeText(text: String) { typeChars(text); if (text.isNotEmpty()) { travelling(if (text.length == 1) text.uppercase() else "TEXT"); rfb.probe() } }
-    // LOGIN: the Mac password from the settings, typed into whatever asks for it (lock screen, a dialog), then Return
+    // LOGIN: the Mac password from the settings.
+    // v47 (Marko, 13.11.2026: "When there is a pop-up ... to enter my password to allow keychain ... when I click on it
+    // and I click login, nothing is happening ... it searches, even the dialog does not need to be in focus ... enter
+    // the password and always allow"): the Mac's Star API (:8863 /login-dialog) has Macro Recorder find every password
+    // dialog through Accessibility, fill it and press ALWAYS ALLOW (else OK). Only when the Mac sees no dialog (the lock
+    // screen) or does not answer, the password is typed into whatever has the focus and Return, as before.
     fun login() {
         if (s.loginPassword.isEmpty()) return
         mods.value = emptySet(); releaseCmd()
-        typeChars(s.loginPassword); tapKey(K_RETURN); travelling("LOGIN")
+        val pw = s.loginPassword
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        s.note("LOGIN: LOOKING FOR THE DIALOG ON THE MAC", bad = false)
+        Thread {
+            // the Star API listens on the Mac's Tailscale address only, never the home Wi-Fi
+            val tsIp = s.prefs?.getString(Tailnet.MAC_IP, null)?.takeIf { it.startsWith("100.") } ?: MacFinder.MAC_TAILSCALE_IP
+            val r = StarApi.loginDialog(tsIp, MacroDoor.token(s.app), pw)
+            main.post {
+                if (r == null || !r.found) {
+                    android.util.Log.i("MantraRemote", "login: " + if (r == null) "no Star API answer, typed" else "no dialog on the Mac, typed")
+                    s.noteText = ""; typeChars(pw); tapKey(K_RETURN); travelling("LOGIN")
+                } else {
+                    s.note(StarApi.summary(r), bad = !r.ok)
+                }
+            }
+        }.start()
     }
     val typing: @Composable () -> Unit = {
         if (keyboard) TypingField(onText = { typeText(it) }, onBackspace = { tapKey(K_BACKSPACE) })
