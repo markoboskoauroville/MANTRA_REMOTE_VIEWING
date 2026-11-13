@@ -651,7 +651,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
                 activity?.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
                     android.net.Uri.parse("https://github.com/markoboskoauroville/MANTRA_REMOTE_VNC_TAILSCALE/releases/latest")))
             }) {
-                T("MANTRA REMOTE VNC ▊", Amber, 26, bold = true)
+                T("MANTRA REMOTE VIEWING ▊", Amber, 26, bold = true)
                 T("v" + BuildConfig.VERSION_NAME + "  ·  tap for the latest version", AmberDim, 13)
             }
             Key("✕", Modifier.width(60.dp), size = 22) { activity?.finish() }   // closes the app: link, service (Tailscale stays on, v32)
