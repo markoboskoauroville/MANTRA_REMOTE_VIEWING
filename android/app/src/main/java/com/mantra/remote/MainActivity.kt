@@ -192,6 +192,8 @@ private const val MAX_REDIALS = 5
 private const val BACKGROUND_MS = 5000L
 
 class MainActivity : ComponentActivity() {
+    override fun onResume() { super.onResume(); AppUpdater.resume(this) }   // v50
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

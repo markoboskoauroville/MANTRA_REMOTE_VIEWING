@@ -389,3 +389,11 @@ Run this. Every time.
 ```
 
 Green across the board = you can leave.
+
+## 14.11.2026: the app updates itself (v48 → v50)
+AppUpdater.kt: at start GitHub's Latest release (public repo, no token); vN newer than versionCode → APK downloaded to
+cache (Wi-Fi first; on mobile data asked first with the size) → "Mantra Remote Viewing vN is ready · Do you want to
+update?" UPDATE / LATER → PackageInstaller session (REQUEST_INSTALL_PACKAGES; Android asks once "Allow from this source",
+then its own "Do you want to update this app?"). First start of the new version: "Updated to vN". MY_PACKAGE_REPLACED posts
+a notification "vN is installed · Tap to open". Tested v48 → v49 on the Pixel 7 emulator. Play Protect can show its own
+dialog on a sideloaded update: the answer is to install/scan, not to block it. v50: onResume continues an install that waited for the permission.

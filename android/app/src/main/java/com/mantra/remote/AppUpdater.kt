@@ -34,6 +34,13 @@ object AppUpdater {
     private const val ACTION = "com.mantra.remote.UPDATE_STATUS"
     private const val TAG = "AppUpdater"
     @Volatile private var busy = false
+    private var pending: File? = null   // v50: waiting for "Allow from this source"
+
+    /** v50: back from the one-time "Allow from this source" page, the install carries on by itself. */
+    fun resume(a: Activity) {
+        val p = pending ?: return
+        if (a.packageManager.canRequestPackageInstalls()) { pending = null; install(a, p) }
+    }
 
     private fun current(c: Context): Long =
         runCatching { c.packageManager.getPackageInfo(c.packageName, 0).longVersionCode }.getOrDefault(0L)
@@ -142,6 +149,7 @@ object AppUpdater {
     private fun install(a: Activity, apk: File) {
         // Android asks once to allow installs from this app; after that only its own confirmation
         if (!a.packageManager.canRequestPackageInstalls()) {
+            pending = apk
             Toast.makeText(a, "Allow Mantra Remote Viewing to install updates, then come back.", Toast.LENGTH_LONG).show()
             a.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${a.packageName}")))
             return

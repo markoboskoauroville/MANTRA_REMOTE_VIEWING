@@ -270,4 +270,4 @@ The remote mouse is not working as I was imagining. Imagine it like this: L is l
 
 14.11.2026, Marko: "we just need to update the Mantra Remote Viewer on the Android application to understand after updating, and that's all."
 (Same morning, about the Mac viewer: "When the application starts, it checks for it, downloads it, and asks you, 'Do you want to update?' Then I say 'yes,' and it downloads and runs the update.")
-**Status:** saved first. v48: AppUpdater.kt (check at start, download, ask, PackageInstaller), "Updated to vN" after; test v48 → v49 on the Pixel 7 emulator.
+**Status (14.11.2026, 06:10):** done. v48 AppUpdater.kt; tested on the Pixel 7 emulator: v48 found v49, downloaded, asked, Android asked once "Allow from this source", then its own Update, installed over v48, "Updated to v49 · everything you set is still here" on the next start. One try was refused by Play Protect (my blind tap answered its dialog). v50: after "Allow from this source" the install carries on by itself (not yet tested).
