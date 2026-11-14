@@ -72,3 +72,12 @@ v39 turned L/R long press into a click MODE: finger down teleported the pointer 
 
 ## 9.11.2026: "lock" means a sticky click mode, not a held button
 v41 made L/R hold the button down; Marko meant that while L is lit every tap is one left click, as pressing L once. v42: tap (<250 ms, <10 px) = mouseClick at the ring's current place; moving only moves the ring relatively. Ask what a "lock" does before choosing between held and sticky.
+
+## 14.11.2026: the updater (update at start)
+- The app asks gh / GitHub for the Latest release; tag vN must equal the app's version number or it never sees itself as current.
+- Test it with two releases: vN with the updater installed by hand once, then vN+1 as a bump only; the question must come.
+- Emulator taps only by text (uiautomator dump): blind coordinates answered Play Protect wrong once and opened the Pixel 7 row
+  (connected to the real phone) once.
+- Android asks "Allow from this source" once; without the onResume hook the install waited for the next start (fixed in v50).
+- Mac: sign the new copy "Mantra Apps" before swapping, or Accessibility is lost; failures reopen the old copy.
+- From now on: MANTRA_MANIFEST modules/update-at-start.md, kits mac-updater / android-updater, skill update-at-start.
