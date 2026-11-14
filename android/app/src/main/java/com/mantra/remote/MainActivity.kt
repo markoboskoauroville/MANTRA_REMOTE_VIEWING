@@ -130,6 +130,8 @@ private fun helpText(label: String): String {
         l.contains("KEYS") || l == "⌨" -> "Opens the phone's keyboard. What you type is typed on the Mac."
         l == "🖱" || l == "MOUSE" -> "MOUSE: while it is lit, the screen is the Mac's mouse: a tap clicks where the finger touches, a tap of two fingers right-clicks where they touch, one finger moved moves the pointer. Spreading, pinching and three-finger panning still work. MOVE beside it: the finger only moves the pointer, no click."
         l == "MOVE" -> "MOVE (with MOUSE on): while it is lit, a tap only moves the Mac's pointer to the finger, it never clicks: for aiming. Three fingers tapped together click, two fingers tapped together right-click, where the pointer stands. Tap MOVE again: taps click again."
+        l == "SPACE" || l == "␣" -> "Space: one space, as the space bar on the Mac's keyboard (with ⌘ lit: ⌘Space, Spotlight)."
+        l == "⌘V" -> "Paste: ⌘V on the Mac (Ctrl+V on the Linux machine), what was copied on the Mac goes where the cursor is."
         l == "NEW" -> "A new tab in the app in front: iTerm, Chrome, Safari, Finder (⌘T on the Mac; Ctrl+T on the Linux machine). After APPS the app you see is the one in front, so the tab opens there."
         l == "D" -> "DRAG: the first press holds the Mac's left button down where the pointer stands; moving the pointer then drags; the second press lets the button go (lit green while held)."
         l == "SCROLL" -> "While it is lit, put a finger on a window and drag it up or down: the pointer goes there first, so that window turns, as with a mouse wheel."
@@ -801,13 +803,15 @@ private const val K_TAB = 0xff09
 private const val K_BRACERIGHT = 0x7d
 private const val K_D = 0x64
 private const val K_T = 0x74
+private const val K_V = 0x76
+private const val K_SPACE = 0x20
 private const val K_RETURN = 0xff0d
 private const val K_ESC = 0xff1b
 private const val K_LEFT = 0xff51
 private const val K_UP = 0xff52
 private const val K_RIGHT = 0xff53
 private const val K_DOWN = 0xff54
-private val KEY_NAMES by lazy { mapOf(K_ESC to "ESC", K_TAB to "TAB", K_RETURN to "⏎", K_BACKSPACE to "⌫", K_LEFT to "←", K_UP to "↑", K_RIGHT to "→", K_DOWN to "↓") }
+private val KEY_NAMES by lazy { mapOf(K_ESC to "ESC", K_TAB to "TAB", K_RETURN to "⏎", K_BACKSPACE to "⌫", K_LEFT to "←", K_UP to "↑", K_RIGHT to "→", K_DOWN to "↓", K_SPACE to "SPACE") }
 
 @Composable
 private fun Live(s: Session) {
@@ -1013,6 +1017,15 @@ private fun Live(s: Session) {
     }
 
     // v52 NEW TAB: ⌘T, a new tab in iTerm, Chrome, Safari and Finder alike (Ctrl+T on the Linux machine's Chrome)
+    // v54 (Marko, 14.11.2026: "action button at the first row, which is space button. Command v."): PASTE = ⌘V
+    // (Ctrl+V on the Linux machine); SPACE goes through tapKey, so a lit modifier joins it
+    fun paste() {
+        mods.value = emptySet(); releaseCmd()
+        travelling("⌘V PASTE")
+        val m = if (lx) K_CTRL else K_CMD
+        rfb.key(m, true); rfb.key(K_V, true); rfb.key(K_V, false); rfb.key(m, false)
+        rfb.probe()
+    }
     fun newTab() {
         mods.value = emptySet(); releaseCmd()
         travelling("+ NEW TAB")
@@ -1471,6 +1484,8 @@ private fun Live(s: Session) {
             Key("ESC", Modifier.width(60.dp), size = 18, padH = 10) { tapKey(K_ESC) }
             // v52 (Marko, 14.11.2026: "one key to open the new tab in iTerm ... same shortcut also Chrome")
             Key("NEW", Modifier.width(56.dp), size = 16, sub = "TAB") { newTab() }
+            Key("␣", Modifier.width(70.dp), size = 20, sub = "SPACE") { tapKey(K_SPACE) }
+            Key("⌘V", Modifier.width(56.dp), size = 16, sub = "PASTE") { paste() }
             modKeys()
             // v28 (Marko, 5.11.2026: "on action row at the top i need to have command only, pure command button"):
             // ⌘TAB is gone; the Mac has its ⌘ toggle in modKeys, the Linux machine gets a pure ⌘ (Super alone = its dock)
@@ -1700,6 +1715,8 @@ private fun Live(s: Session) {
                 RailKey("TAB", null, RailState.OFF) { tapKey(K_TAB) }
                 RailKey("⏎", null, RailState.OFF) { tapKey(K_RETURN) }
                 RailKey("⌫", null, RailState.OFF) { tapKey(K_BACKSPACE) }
+                RailKey("SPACE", null, RailState.OFF) { tapKey(K_SPACE) }
+                RailKey("⌘V", "PASTE", RailState.OFF) { paste() }
             }
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 screen(Modifier.fillMaxSize())

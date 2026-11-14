@@ -1,5 +1,8 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 14.11.2026, v54:** row 1 has ␣ SPACE (tapKey(K_SPACE), a lit modifier joins it) and ⌘V PASTE (Ctrl+V on the
+VM) after NEW TAB; in full screen both are on the left rail under ⌫.
+
 **State 14.11.2026, v53 (request of 14.11.2026):** a phone (PhoneScreen, Phones.kt) opens on the whole glass: Android's
 bars hidden, upright, outside the root's safe-area padding; TOUCH is the default (no pointer arrow); the keys (◀ MAC,
 ✕, BACK, HOME, APPS, TOUCH/MOUSE, ⌨, status) are a menu over the picture, opened by a finger that lands within 24 dp of
