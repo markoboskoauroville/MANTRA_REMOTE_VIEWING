@@ -1,5 +1,15 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 14.11.2026, v52 (request of 14.11.2026):**
+- Row 1: **NEW TAB** (label NEW, sub TAB) right after ESC = ⌘T (Ctrl+T on the VM): a new tab in iTerm, Chrome, Safari,
+  Finder. Also on the full-screen rail (NEW TAB above NEXT TAB).
+- **APPS now brings the app to the front**: after the view moves, `bringToFront` matches the window's app name to the
+  Dock Switcher's /apps and calls `/open?id=`; no match → a click on the window's top edge (middle, 6 px down), not in
+  VIEW ONLY. The travel line says `i/n APP · IN FRONT` (or `IN FRONT (CLICKED)`).
+- **MOUSE redone**: L and R (and click lock, `clickLock`) are gone. With 🖱 on: a tap clicks at the finger, a two-finger
+  tap right-clicks at their middle, a moved finger moves the pointer. **MOVE** (pref `mouse_move_only`) = the old aiming
+  mode: taps only move the pointer; three-finger tap clicks, two-finger tap right-clicks at the pointer. D (drag) stays.
+
 **State 14.11.2026, v51:** ⚙ on the VM (chromium-vm) has **SERVICES**: the VM's services from vmctl (repo vm-chromium,
 tools/vmctl; `GET http://100.102.86.30:8896/services`, `POST /services/NAME/start|stop`, X-Mantra-Token). One row each:
 ● green running / ○ white stopped, short name (≤ 8 chars, same as the VM status bar) and title; a tap starts (gui=true: a
