@@ -84,3 +84,8 @@ v41 made L/R hold the button down; Marko meant that while L is lit every tap is 
 
 - 14.11.2026 (v51): a start through vmctl can take a minute (a Pixel boots ~40 s): the HTTP read timeout for start/stop
   is 300 s and the call runs on Dispatchers.IO; the 5 s list refresh keeps its own short timeout.
+
+## 14.11.2026: installing from the cloud session (v52)
+- The cloud container reaches the Nothing's adb on 5555 through Tailscale: `socat TCP-LISTEN:15555,bind=127.0.0.1,fork
+  EXEC:"tailscale --socket=/tmp/ts/sock nc 100.67.149.40 5555"`, then `adb connect 127.0.0.1:15555`. Its fresh adb key
+  is unauthorized until Marko taps Allow on the phone; then `adb install -r` of the release APK works (v47 → v52).
