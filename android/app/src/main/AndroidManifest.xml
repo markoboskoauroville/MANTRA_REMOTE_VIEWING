@@ -10,6 +10,8 @@
     <!-- v30 keep debugging: granted once from the Mac (`phones keep`), never asked of the user -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- v48: the app installs its own updates (asked once by Android) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Tailscale is switched on and off by the app (its IPNReceiver) -->
     <queries>

@@ -143,5 +143,8 @@ class KeeperService : Service() {
 
 /** After every start of the phone and every update of the app. */
 class KeeperBoot : BroadcastReceiver() {
-    override fun onReceive(c: Context, i: Intent) { DebugKeeper.start(c) }
+    override fun onReceive(c: Context, i: Intent) {
+        DebugKeeper.start(c)
+        if (i.action == Intent.ACTION_MY_PACKAGE_REPLACED) AppUpdater.notifyUpdated(c)   // v48
+    }
 }

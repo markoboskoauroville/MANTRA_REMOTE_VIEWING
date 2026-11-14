@@ -203,6 +203,7 @@ class MainActivity : ComponentActivity() {
             Hold.session = it
         }
         setContent { App(prefs, session) }
+        AppUpdater.checkAtStart(this)   // v48: a newer release is downloaded, then he is asked (Marko, 14.11.2026)
         // v30: the macro door (port 8841, Tailscale and adb forward only) and the debugging keeper
         MacroDoor.attach(this, object : MacroTarget {
             override fun live() = session.phase == Phase.LIVE && session.rfb != null
