@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -78,14 +79,39 @@ fun PhoneScreen(phone: Phone, pin: String = "", onMac: () -> Unit) {
     // v16 (Marko, 26.10.2026: "I want to see my mouse on the screen ... I press and I drag, and it acts like ...
     // keeping my left mouse button down"): MOUSE, a pointer moved like a trackpad (tap = click, hold then drag =
     // the button held), or TOUCH, the finger is the finger; ⌨ types into the phone
-    var mouse by remember { mutableStateOf(true) }
+    // v53 (Marko, 14.11.2026: "it come immediately in the full screen ... not mouse default, default is tapping ...
+    // swiping from left or right edge of the screen brings me the menus ... mouse pointer is showing, which I don't
+    // like"): TOUCH first, the picture on the whole glass (no bars, no keys), the keys in a menu that an inward swipe
+    // from the left or right edge (or Android's own back swipe) opens; MOUSE is still in the menu
+    var mouse by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
     var keyboard by remember { mutableStateOf(false) }
     var px by remember { mutableStateOf(0.5f) }
     var py by remember { mutableStateOf(0.5f) }
     var held by remember { mutableStateOf(false) }
     var misses by remember { mutableIntStateOf(0) }
     var macAskedAt by remember { mutableStateOf(0L) }
-    androidx.activity.compose.BackHandler { link?.key("BACK") }
+    androidx.activity.compose.BackHandler { menu = !menu }
+    // the whole glass: Android's bars hidden (a swipe from the edge shows them for a moment), upright
+    val activity = context as? android.app.Activity
+    DisposableEffect(Unit) {
+        val win = activity?.window
+        val before = activity?.requestedOrientation
+        if (win != null) {
+            val bars = androidx.core.view.WindowCompat.getInsetsController(win, win.decorView)
+            bars.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            bars.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        onDispose {
+            if (win != null) {
+                // back to what the Mac's screen had: its FULL keeps the bars hidden and stands sideways
+                val wasFull = before == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                if (!wasFull) androidx.core.view.WindowCompat.getInsetsController(win, win.decorView).show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                if (before != null) activity.requestedOrientation = before
+            }
+        }
+    }
 
     DisposableEffect(phone.address) { onDispose { link?.stop(); link = null } }
     // v16: a phone is reached through Tailscale: switched on here too (the Mac's FIRST SCREEN or a fresh start leave it off)
@@ -110,22 +136,9 @@ fun PhoneScreen(phone: Phone, pin: String = "", onMac: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Color.Black)) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            PhoneKey("◀ MAC", Modifier.weight(1f)) { onMac() }
-            PhoneKey("BACK", Modifier.weight(1f)) { link?.key("BACK") }
-            PhoneKey("HOME", Modifier.weight(1f)) { link?.key("HOME") }
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            PhoneKey(if (mouse) "MOUSE" else "TOUCH", Modifier.weight(1f)) { mouse = !mouse }
-            PhoneKey("⌨", Modifier.weight(1f)) { keyboard = !keyboard }
-            PhoneKey("APPS", Modifier.weight(1f)) { link?.key("APPS") }
-        }
-        androidx.compose.material3.Text(status, color = Color(0xFF7FE0E6), fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp),
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, maxLines = 2,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp))
-        if (keyboard) TypingField(onText = { t -> if (t == "\n") link?.key("ENTER") else link?.text(t) }, onBackspace = { link?.key("DEL") })
-        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+    // the window's safe-area padding is undone here, so the picture reaches every edge of the glass
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             val ratio = if (w > 0 && h > 0) w.toFloat() / h else 1080f / 2400f
             Box(Modifier.aspectRatio(ratio)) {
             AndroidView(
@@ -177,8 +190,37 @@ fun PhoneScreen(phone: Phone, pin: String = "", onMac: () -> Unit) {
                             // a finger held still for HOLD_MS: the button goes down where the pointer is
                             if (mouse && !held && travel < SLOP_PX) { held = true; link?.finger(MotionEvent.ACTION_DOWN, px, py) }
                         }
+                        // v53: a finger that lands on the left or right edge and goes inward opens the menu; it
+                        // reaches the phone only when it does something else (a tap there, or a move along the edge)
+                        var edge = false; var edgeX = 0f; var edgeY = 0f; var skip = false
                         setOnTouchListener { v, ev ->
                             val a = link ?: return@setOnTouchListener true
+                            val edgePx = EDGE_DP * v.resources.displayMetrics.density
+                            if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+                                edge = ev.x < edgePx || ev.x > v.width - edgePx
+                                edgeX = ev.x; edgeY = ev.y
+                                if (edge) return@setOnTouchListener true
+                            }
+                            if (edge) {
+                                val inward = if (edgeX < v.width / 2) ev.x - edgeX else edgeX - ev.x
+                                val fx = (edgeX / v.width).coerceIn(0f, 1f); val fy = (edgeY / v.height).coerceIn(0f, 1f)
+                                when {
+                                    ev.actionMasked == MotionEvent.ACTION_MOVE && inward > SWIPE_PX -> { edge = false; menu = true; skip = true }
+                                    ev.actionMasked == MotionEvent.ACTION_MOVE && kotlin.math.abs(ev.y - edgeY) > SWIPE_PX -> {
+                                        // a move along the edge: it was the phone's after all, given from where it started
+                                        edge = false; lastX = ev.x; lastY = ev.y
+                                        if (!mouse) a.touch(MotionEvent.ACTION_DOWN, 0, intArrayOf(ev.getPointerId(0)), floatArrayOf(fx), floatArrayOf(fy))
+                                    }
+                                    ev.actionMasked == MotionEvent.ACTION_UP -> {
+                                        edge = false
+                                        if (!mouse) { a.finger(MotionEvent.ACTION_DOWN, fx, fy); a.finger(MotionEvent.ACTION_UP, fx, fy) }
+                                        return@setOnTouchListener true
+                                    }
+                                    else -> return@setOnTouchListener true
+                                }
+                                if (skip) return@setOnTouchListener true
+                            }
+                            if (skip) { if (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) skip = false; return@setOnTouchListener true }
                             if (!mouse) {
                                 val n = ev.pointerCount
                                 val ids = IntArray(n) { ev.getPointerId(it) }
@@ -224,6 +266,32 @@ fun PhoneScreen(phone: Phone, pin: String = "", onMac: () -> Unit) {
             }
             }
         }
+        // v53: the menu, over the picture, opened from the edge; a key does its work and closes it, ✕ or Back closes it
+        if (menu) Column(Modifier.fillMaxSize().background(Color(0xCC000000)).clickable { menu = false }.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PhoneKey("◀ MAC", Modifier.weight(1f)) { menu = false; onMac() }
+                PhoneKey("✕", Modifier.weight(0.5f)) { menu = false }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PhoneKey("BACK", Modifier.weight(1f)) { menu = false; link?.key("BACK") }
+                PhoneKey("HOME", Modifier.weight(1f)) { menu = false; link?.key("HOME") }
+                PhoneKey("APPS", Modifier.weight(1f)) { menu = false; link?.key("APPS") }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PhoneKey(if (mouse) "MOUSE (TAP: TOUCH)" else "TOUCH (TAP: MOUSE)", Modifier.weight(2f)) { mouse = !mouse; menu = false }
+                PhoneKey("⌨", Modifier.weight(1f)) { keyboard = !keyboard; menu = false }
+            }
+            androidx.compose.material3.Text(status, color = Color(0xFF7FE0E6), fontSize = androidx.compose.ui.unit.TextUnit(12f, androidx.compose.ui.unit.TextUnitType.Sp),
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, maxLines = 4, modifier = Modifier.fillMaxWidth().padding(4.dp))
+        }
+        // the typing field over the bottom of the picture while ⌨ is on
+        if (keyboard) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().imePadding()) {
+            TypingField(onText = { t -> if (t == "\n") link?.key("ENTER") else link?.text(t) }, onBackspace = { link?.key("DEL") })
+        }
+        // until the picture comes, what is happening is written in the middle
+        if (w == 0) androidx.compose.material3.Text(status, color = Color(0xFF7FE0E6), fontSize = androidx.compose.ui.unit.TextUnit(13f, androidx.compose.ui.unit.TextUnitType.Sp),
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, modifier = Modifier.align(Alignment.Center).padding(24.dp))
     }
 }
 
@@ -249,3 +317,6 @@ private fun PhoneKey(label: String, modifier: Modifier, onClick: () -> Unit) {
 private const val SPEED = 1.6f
 private const val HOLD_MS = 350L
 private const val SLOP_PX = 24f
+/** v53: how near the left or right edge a finger must land, and how far inward it must go, to open the menu */
+private const val EDGE_DP = 24f
+private const val SWIPE_PX = 60f

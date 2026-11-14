@@ -1,5 +1,10 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 14.11.2026, v53 (request of 14.11.2026):** a phone (PhoneScreen, Phones.kt) opens on the whole glass: Android's
+bars hidden, upright, outside the root's safe-area padding; TOUCH is the default (no pointer arrow); the keys (◀ MAC,
+✕, BACK, HOME, APPS, TOUCH/MOUSE, ⌨, status) are a menu over the picture, opened by a finger that lands within 24 dp of
+the left or right edge and goes 60 px inward, or by Android's back swipe. A tap at the edge still reaches the phone.
+
 **State 14.11.2026, v52 (request of 14.11.2026):**
 - Row 1: **NEW TAB** (label NEW, sub TAB) right after ESC = ⌘T (Ctrl+T on the VM): a new tab in iTerm, Chrome, Safari,
   Finder. Also on the full-screen rail (NEW TAB above NEXT TAB).

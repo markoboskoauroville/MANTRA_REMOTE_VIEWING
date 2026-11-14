@@ -541,10 +541,11 @@ private fun App(prefs: android.content.SharedPreferences, session: Session) {
             Phase.SETUP, Phase.CONNECTING -> Setup(prefs, session)
             Phase.LIVE -> Live(session)
         }
-        // v16: a phone on the whole screen, over the Mac or over the first screen (a phone needs no Mac)
-        session.phone?.let { p -> PhoneScreen(p, pin = Secrets.pin(prefs, p.address), onMac = { session.phone = null }) }
         HelpPopup()
     }
+    // v16: a phone on the whole screen, over the Mac or over the first screen (a phone needs no Mac); v53: outside the
+    // safe-area padding, so its picture reaches every edge of the glass
+    session.phone?.let { p -> PhoneScreen(p, pin = Secrets.pin(prefs, p.address), onMac = { session.phone = null }) }
 }
 
 @Composable
