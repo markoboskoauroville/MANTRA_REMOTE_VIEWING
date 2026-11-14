@@ -267,3 +267,7 @@ how I want to change my Mantra Remote: mouse actions. When I click the mouse to 
 The remote mouse is not working as I was imagining. Imagine it like this: L is locked and I click on the screen. There is a sequence of actions, the same as tapping/pressing that button while it's in the unlocked state.
 **Status (9.11.2026):** v42: L/R lock = sticky click mode: a tap clicks at the ring (no jump, no delay), movement moves the ring relatively; D stays the held drag.
 **Status (9.11.2026):** v42 installed on the Nothing and the Pixel 7 (versionName=42); not yet tried by hand.
+
+14.11.2026, Marko: "we just need to update the Mantra Remote Viewer on the Android application to understand after updating, and that's all."
+(Same morning, about the Mac viewer: "When the application starts, it checks for it, downloads it, and asks you, 'Do you want to update?' Then I say 'yes,' and it downloads and runs the update.")
+**Status:** saved first. v48: AppUpdater.kt (check at start, download, ask, PackageInstaller), "Updated to vN" after; test v48 → v49 on the Pixel 7 emulator.
