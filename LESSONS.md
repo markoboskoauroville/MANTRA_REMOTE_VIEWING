@@ -81,3 +81,6 @@ v41 made L/R hold the button down; Marko meant that while L is lit every tap is 
 - Android asks "Allow from this source" once; without the onResume hook the install waited for the next start (fixed in v50).
 - Mac: sign the new copy "Mantra Apps" before swapping, or Accessibility is lost; failures reopen the old copy.
 - From now on: MANTRA_MANIFEST modules/update-at-start.md, kits mac-updater / android-updater, skill update-at-start.
+
+- 14.11.2026 (v51): a start through vmctl can take a minute (a Pixel boots ~40 s): the HTTP read timeout for start/stop
+  is 300 s and the call runs on Dispatchers.IO; the 5 s list refresh keeps its own short timeout.

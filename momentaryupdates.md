@@ -271,3 +271,10 @@ The remote mouse is not working as I was imagining. Imagine it like this: L is l
 14.11.2026, Marko: "we just need to update the Mantra Remote Viewer on the Android application to understand after updating, and that's all."
 (Same morning, about the Mac viewer: "When the application starts, it checks for it, downloads it, and asks you, 'Do you want to update?' Then I say 'yes,' and it downloads and runs the update.")
 **Status (14.11.2026, 06:10):** done. v48 AppUpdater.kt; tested on the Pixel 7 emulator: v48 found v49, downloaded, asked, Android asked once "Allow from this source", then its own Update, installed over v48, "Updated to v49 · everything you set is still here" on the next start. One try was refused by Play Protect (my blind tap answered its dialog). v50: after "Allow from this source" the install carries on by itself (not yet tested).
+
+14.11.2026, Marko (saved in vm-chromium/momentaryupdates.md, the VM request): "I need to login with my remote viewing to this
+machine and on the gear icon I will have each program and we now call the program services so I call it services so there is
+a service of cloud there is a service of Chrome there is a service of Firefox there are two virtual pixels there ... and I need
+to start them manually"
+**Status (14.11.2026):** v51: ⚙ → SERVICES (only on the VM): rows from vmctl (100.102.86.30:8896), green running / white
+stopped, a tap starts or stops, core rows locked; VMCTL TOKEN pasted once (private prefs). Built by GitHub Actions.

@@ -67,6 +67,7 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -1417,6 +1418,7 @@ private fun Live(s: Session) {
         rfb.key(K_CMD, true); rfb.key(K_CMD, false); rfb.probe()
     }
     var settingsOpen by remember { mutableStateOf(false) }
+    var servicesOpen by remember { mutableStateOf(false) }
     // v17: each of the three rows can be switched off in ⚙ (Marko, 27.10.2026: "In settings I can disable all the rows")
     var rowKeys by remember { mutableStateOf(s.prefs?.getBoolean(ROW_KEYS, true) ?: true) }
     var rowTools by remember { mutableStateOf(s.prefs?.getBoolean(ROW_TOOLS, true) ?: true) }
@@ -1550,6 +1552,11 @@ private fun Live(s: Session) {
                 }
                 Key("← BACK TO LOGIN", Modifier.weight(1f), size = 14, sub = "OTHER MACHINE") { settingsOpen = false; s.phone = null; s.hangUp() }
             }
+            // v51 (Marko, 14.11.2026: "on the gear icon I will have each program and we now call the program services"):
+            // on the VM, its services (vmctl): one row each, a tap starts or stops it; core rows locked
+            s.linux?.let { vm ->
+                Key("SERVICES", Modifier.fillMaxWidth(), size = 14, sub = "START · STOP ON ${vm.name}") { servicesOpen = true }
+            }
             // in ⚙ every number starts at the left edge, padded on its right, so the units stand in one column (Marko, 26.10.2026)
             val vnc = "%-7s MB  ↓ %s  ↑ %s".format("%.2f".format((rx + tx) / 1e6), "%.2f".format(rx / 1e6), "%.2f".format(tx / 1e6))
             val speed = "%-7s kbit/s".format(kbps)
@@ -1619,6 +1626,10 @@ private fun Live(s: Session) {
                 rowViews = !rowViews; s.prefs?.edit()?.putBoolean(ROW_VIEWS, rowViews)?.apply()
             }
         }
+    }
+
+    if (servicesOpen) s.linux?.let { vm ->
+        Dialog(onDismissRequest = { servicesOpen = false }) { ServicesPanel(vm.ip, vm.name, s.prefs) { servicesOpen = false } }
     }
 
     // a long press on FPS: every rate at once, one tap chooses (Marko, 25.10.2026)
@@ -1880,3 +1891,96 @@ internal fun TypingField(onText: (String) -> Unit, onBackspace: () -> Unit) {
 
 /** v35: the view and the Dock's hiding as they were before DOCK moved them. */
 data class DockBefore(val zoom: Float, val pan: Offset, val mouse: Pair<Int, Int>?, val hidden: Boolean, val monitor: Int)
+
+
+/**
+ * v51: the VM's services panel (Marko, 14.11.2026). Rows from vmctl (VmServices), read again every 5 s while open:
+ * green dot = running, white = stopped; a tap on a service row starts or stops it (STARTING… / STOPPING… on the row),
+ * core rows carry a lock and take no tap. The token is pasted once into VMCTL TOKEN and kept in the private prefs.
+ */
+@Composable
+private fun ServicesPanel(ip: String, vmName: String, prefs: android.content.SharedPreferences?, close: () -> Unit) {
+    var token by remember { mutableStateOf(prefs?.getString(VmServices.TOKEN_PREF, "") ?: "") }
+    var editing by remember { mutableStateOf(token.isEmpty()) }
+    var draft by remember { mutableStateOf("") }
+    var list by remember { mutableStateOf<List<VmServices.Service>?>(null) }
+    var error by remember { mutableStateOf("") }
+    val busy = remember { androidx.compose.runtime.mutableStateMapOf<String, String>() }     // name -> STARTING… / STOPPING…
+    val rowError = remember { androidx.compose.runtime.mutableStateMapOf<String, String>() }
+    var tick by remember { mutableIntStateOf(0) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    LaunchedEffect(token) {
+        while (token.isNotEmpty()) {
+            try {
+                list = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { VmServices.list(ip, token) }
+                error = ""
+            } catch (e: VmServices.Failure) {
+                error = e.message ?: "?"
+            }
+            val t = tick
+            for (i in 0 until 50) { kotlinx.coroutines.delay(100); if (tick != t) break }      // 5 s, sooner after a tap
+        }
+    }
+    Column(Modifier.background(Bg).border(1.dp, Rule).verticalScroll(rememberScrollState()).padding(14.dp).width(320.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            T("── SERVICES ──", AmberDim, 13)
+            Box(Modifier.align(Alignment.CenterEnd).size(40.dp).border(1.5.dp, Amber, CircleShape)
+                .clickable { close() }, contentAlignment = Alignment.Center) { T("✕", Amber, 20) }
+        }
+        T("$vmName · ● running  ○ stopped  🔒 core (always on). A tap starts or stops a service.", Color(0xFFF2DDB4), 12)
+        if (editing) {
+            Field("VMCTL TOKEN (paste once; kept on this phone only)", draft, secret = true) { draft = it.trim() }
+            if (draft.isNotEmpty()) Key("SAVE TOKEN", Modifier.fillMaxWidth(), size = 14) {
+                prefs?.edit()?.putString(VmServices.TOKEN_PREF, draft)?.apply()
+                token = draft; draft = ""; editing = false; list = null
+            }
+        } else {
+            Key("VMCTL TOKEN ••••", Modifier.fillMaxWidth(), size = 12, sub = "TAP TO REPLACE") { editing = true }
+        }
+        if (error.isNotEmpty()) T("> $error", RedAlert, 12)
+        val l = list
+        if (token.isNotEmpty() && l == null && error.isEmpty()) T("> reading the services …", AmberDim, 12)
+        l?.sortedBy { if (it.core) 0 else 1 }?.forEach { sv ->
+            val state = busy[sv.name]
+            ServiceRow(sv, state, rowError[sv.name]) {
+                if (sv.core || state != null) return@ServiceRow
+                val on = !sv.running
+                busy[sv.name] = if (on) "STARTING…" else "STOPPING…"; rowError.remove(sv.name)
+                scope.launch {
+                    try {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { VmServices.set(ip, token, sv.name, on) }
+                    } catch (e: VmServices.Failure) {
+                        rowError[sv.name] = e.message ?: "?"
+                    }
+                    busy.remove(sv.name); tick++
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServiceRow(sv: VmServices.Service, busy: String?, err: String?, onTap: () -> Unit) {
+    val view = LocalView.current
+    var flash by remember { mutableStateOf(0) }
+    LaunchedEffect(flash) { if (flash > 0) { kotlinx.coroutines.delay(PRESS_FLASH_MS); flash = 0 } }
+    val lit = flash > 0
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).background(BgRaised)
+            .border(1.dp, if (lit) Color.White else Rule)
+            .clickable(enabled = !sv.core) { flash++; view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onTap() }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        T(if (sv.running) "●" else "○", if (sv.running) GreenOk else Color.White, 20)
+        Column(Modifier.weight(1f)) {
+            T(sv.short, if (lit) Color.White else Amber, 15, bold = true, oneLine = true)
+            T(sv.title, Color(0xFFF2DDB4), 11)
+            if (busy != null) T(busy, Cyan, 12, bold = true)
+            if (err != null) T("> $err", RedAlert, 11)
+        }
+        T(if (sv.core) "🔒" else if (sv.running) "STOP" else "START", if (sv.core) AmberDim else Amber, 12, bold = true)
+    }
+}

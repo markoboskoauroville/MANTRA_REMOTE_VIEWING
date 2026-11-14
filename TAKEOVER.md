@@ -1,5 +1,13 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 14.11.2026, v51:** ⚙ on the VM (chromium-vm) has **SERVICES**: the VM's services from vmctl (repo vm-chromium,
+tools/vmctl; `GET http://100.102.86.30:8896/services`, `POST /services/NAME/start|stop`, X-Mantra-Token). One row each:
+● green running / ○ white stopped, short name (≤ 8 chars, same as the VM status bar) and title; a tap starts (gui=true: a
+Pixel opens its mirror on the VM screen) or stops it, the row says STARTING… / STOPPING… meanwhile; core rows (CKBOND,
+QUEEN, …) carry 🔒 and take no tap; read again every 5 s while open. Token: VMCTL TOKEN field in the panel (pasted once,
+prefs key vmctl_token, shown as ••••; the Mac copy is ~/Downloads/API/chromium-vm-vmctl.txt). Code: VmServices.kt +
+ServicesPanel in MainActivity.kt. Built by GitHub Actions only; not yet tried by hand.
+
 **Renamed 13.11.2026:** markoboskoauroville/MANTRA_REMOTE_VNC_TAILSCALE is now **markoboskoauroville/MANTRA_REMOTE_VIEWING** (Marko). Done by Queen.
 
 **Renamed 13.11.2026:** MANTRA REMOTE VNC is now **MANTRA REMOTE VIEWING** (Marko). Done by Queen.
