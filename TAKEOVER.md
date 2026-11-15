@@ -1,5 +1,7 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 15.11.2026, v61:** no floating accessibility button (Marko: "I didn't invite it. Remove that blob"): flagRequestAccessibilityButton removed from claude_control_service.xml, and on connect the service takes its own component out of `accessibility_button_targets` (needs WRITE_SECURE_SETTINGS from `mremote keep`, else skipped).
+
 **State 15.11.2026, v60 (Marko: "if accessibility is not enabled, it needs to put me a link ... as we do on other apps
 ... the same with TTT"):** the first page shows, while Claude Control is off, an amber card (CLAUDE CONTROL IS OFF ·
 PERMISSIONS, one line "Lets Claude Code operate this phone with a visible pointer, local network only.", button ENABLE

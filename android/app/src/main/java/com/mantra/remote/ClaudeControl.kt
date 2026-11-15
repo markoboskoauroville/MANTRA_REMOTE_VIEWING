@@ -79,10 +79,23 @@ class ClaudeControl : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        dropShortcut()
         main.post {
             if (overlay == null) overlay = PointerOverlay(this).also { it.attach() }
         }
         openDoor()
+    }
+
+    /** v61 (Marko, 15.11.2026: "I have a small blob coming up. I didn't invite it. Remove that blob"): the service asks
+     *  for no accessibility button, and if Android put ours into accessibility_button_targets anyway, it is taken out
+     *  (works where `mremote keep` granted WRITE_SECURE_SETTINGS; silently skipped elsewhere). */
+    private fun dropShortcut() = runCatching {
+        val key = "accessibility_button_targets"
+        val cur = android.provider.Settings.Secure.getString(contentResolver, key) ?: return@runCatching
+        val mine = android.content.ComponentName(this, ClaudeControl::class.java)
+        val kept = cur.split(':').filter { it.isNotBlank() && android.content.ComponentName.unflattenFromString(it) != mine }
+        if (kept.size != cur.split(':').count { it.isNotBlank() })
+            android.provider.Settings.Secure.putString(contentResolver, key, kept.joinToString(":"))
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}

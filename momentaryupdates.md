@@ -286,3 +286,6 @@ stopped, a tap starts or stops, core rows locked; VMCTL TOKEN pasted once (priva
 
 15.11.2026, Marko (after v59): "We are not doing this, like you said. I open Mantra Remote Viewing, and if accessibility is not enabled, it needs to put me a link to get to accessibility and open the right part of settings. I just need to enable things as we do on other apps. We do it the same with TTT. Please make this available"
 **Status:** saved first.
+
+15.11.2026, Marko (after enabling Claude Control on the Pixel): "now I have a small blob coming up. I didn't invite it. Remove that blob"
+**Status:** saved first. v61: the service no longer asks for the accessibility button.
