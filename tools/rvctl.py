@@ -25,7 +25,7 @@ over the internet. Loopback needs no token.
 Phones (edit PHONES): each is an ordered list of adb targets to try. USB serial is fully local; the LAN/Tailscale
 address is the fallback. The token (for a non-loopback reach) is ~/.config/mantra-door.token, never printed.
 """
-import json, os, subprocess, sys, time, urllib.request
+import http.client, json, os, subprocess, sys, time, urllib.error, urllib.request
 
 ADB = os.environ.get("ADB", os.path.expanduser("~/Library/Android/sdk/platform-tools/adb"))
 if not os.path.exists(ADB):
@@ -89,8 +89,8 @@ def _req(base, path, data=None, timeout=20, raw=False):
         with urllib.request.urlopen(req, timeout=timeout) as r:
             b = r.read()
             return b if raw else json.loads(b)
-    except urllib.error.URLError as e:
-        sys.exit(f"the Claude Control door did not answer ({e}). Enable it once on the phone:\n"
+    except (urllib.error.URLError, OSError, http.client.HTTPException) as e:
+        sys.exit(f"the Claude Control door did not answer ({type(e).__name__}: {e}). Enable it once on the phone:\n"
                  f"  Settings → Accessibility → 'Mantra Remote Viewing — Claude Control' → On")
 
 
