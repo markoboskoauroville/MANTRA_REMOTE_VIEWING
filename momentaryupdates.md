@@ -292,3 +292,6 @@ stopped, a tap starts or stops, core rows locked; VMCTL TOKEN pasted once (priva
 
 15.11.2026, Marko (after watching the first real rvctl session): "You broke the rule for eye following. Eye tracing: we need to write skills for eye tracing. If the text is up and the arrow is down, I'm confused. The text should always be above the arrow. Written when you do the clicking."
 **Status:** saved first. v62: the label travels with the pointer, just above the arrow tip.
+
+15.11.2026 (coordinator, after rvctl test taps landed in Marko's live Claude chat on the Pixel; Marko's rule since this morning): no action on his phones unless he said he is watching. rvctl refuses every action without `--watched` ("Ask Marko: are you watching?") and without `--expect <package>` matching the foreground package read from the door right before acting.
+**Status:** saved first. v63: GET /foreground in ClaudeControl; rvctl guard.

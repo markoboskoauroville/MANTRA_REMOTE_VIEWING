@@ -21,6 +21,14 @@ over the internet. Loopback needs no token.
     rvctl pixel  tree                              the accessibility node tree (text + bounds), reliable
     rvctl pixel  open-viewer                       open the Mac viewer (scrcpy) on this phone over the LAN/adb
     rvctl pixel  health
+    rvctl pixel  foreground                        the package in front right now
+
+THE GUARD (15.11.2026, after test taps landed in Marko's live Claude chat): every action (tap, longpress, swipe,
+scroll, text, key) needs BOTH
+    --watched              the caller asserts Marko said he is watching (no flag: "Ask Marko: are you watching?")
+    --expect <package>     the app that must be in front; read from the door right before acting, refused on a mismatch
+e.g.  rvctl pixel tap 540 1200 --label "NDI" --expect com.mantraproductions.manualcamera --watched
+health / tree / shot / foreground / open-viewer only look and need neither.
 
 Phones (edit PHONES): each is an ordered list of adb targets to try. USB serial is fully local; the LAN/Tailscale
 address is the fallback. The token (for a non-loopback reach) is ~/.config/mantra-door.token, never printed.
@@ -39,6 +47,11 @@ PHONES = {
         "targets": ["41241FDH2S10SJ", "192.168.1.101:5555", "100.70.23.53:5555"],
         "title": "PIXEL 7 · REMOTE VIEWING",
         "screen": "pixel-screen",
+    },
+    "emu": {   # the Pixel_7_API_35 emulator, for tests that must not touch Marko's phones
+        "targets": ["emulator-5554"],
+        "title": "PIXEL 7 EMULATOR",
+        "screen": "",
     },
     "nothing": {
         "targets": ["0005534BC000140", "100.67.149.40:5555"],
@@ -101,6 +114,31 @@ def _opt(args, name, default=None, cast=str):
     return default
 
 
+ACTIONS = {"tap", "longpress", "swipe", "scroll", "text", "key"}
+
+
+def _foreground(base):
+    """The package in front, from the door (v63+). None when the app is older."""
+    try:
+        with urllib.request.urlopen(base + "/foreground", timeout=10) as r:
+            return json.loads(r.read()).get("package", "")
+    except urllib.error.HTTPError:
+        return None
+    except (urllib.error.URLError, OSError, http.client.HTTPException) as e:
+        sys.exit(f"the Claude Control door did not answer ({type(e).__name__}: {e}); nothing was done")
+
+
+def _guard(phone, cmd, rest, base):
+    """Refuse an action unless Marko watches and the expected app is in front, read right before acting."""
+    want = _opt(rest, "--expect")
+    fg = _foreground(base)
+    if fg is None:
+        sys.exit(f"REFUSED: the app on {phone} is older than v63 (no /foreground); update it first. Nothing was done.")
+    if fg != want:
+        sys.exit(f"REFUSED: {cmd} expects {want} in front, but {phone} shows {fg or '(nothing readable)'}. "
+                 f"Nothing was done.")
+
+
 def open_viewer(phone, cfg):
     """Open the Mac viewer (scrcpy) on this phone over the LAN/adb, so Marko watches the big pointer. Local only."""
     helper = cfg.get("screen")
@@ -120,6 +158,12 @@ def main(argv):
         return 1
     phone, cmd = argv[0], argv[1]
     rest = argv[2:]
+    # the guard's first half needs no phone at all: refuse before anything is touched
+    if cmd in ACTIONS:
+        if "--watched" not in rest:
+            sys.exit("REFUSED: Ask Marko: are you watching?  (then add --watched). Nothing was done.")
+        if not _opt(rest, "--expect"):
+            sys.exit(f"REFUSED: {cmd} needs --expect <package> (the app that must be in front). Nothing was done.")
     target, cfg = _pick_target(phone)
 
     if cmd == "open-viewer":
@@ -132,6 +176,11 @@ def main(argv):
         print(json.dumps(_req(base, "/health"), indent=2)); return 0
     if cmd == "tree":
         print(json.dumps(_req(base, "/tree"), indent=2)); return 0
+    if cmd == "foreground":
+        fg = _foreground(base)
+        print(fg if fg is not None else "(app older than v63: no /foreground)"); return 0
+    if cmd in ACTIONS:
+        _guard(phone, cmd, rest, base)
     if cmd == "shot":
         out = rest[0] if rest else "/tmp/rvctl.png"
         open(out, "wb").write(_req(base, "/shot", raw=True))

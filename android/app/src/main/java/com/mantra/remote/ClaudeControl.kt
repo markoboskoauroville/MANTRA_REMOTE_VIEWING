@@ -220,7 +220,14 @@ class ClaudeControl : AccessibilityService() {
                 route == "/shot" -> shot()?.let { reply(out, 200, "image/png", it) }
                     ?: reply(out, 500, "text/plain", "no screenshot".toByteArray())
                 route == "/tree" -> reply(out, 200, "application/json", tree().toString().toByteArray())
-                else -> reply(out, 404, "text/plain", "GET /health /shot /tree; POST /tap /longpress /swipe /scroll /text /key".toByteArray())
+                // v63: what app is in front, read right before every action (rvctl --expect refuses on a mismatch)
+                route == "/foreground" -> reply(out, 200, "application/json", JSONObject().put("ok", true)
+                    .put("package", rootInActiveWindow?.packageName?.toString() ?: "")
+                    .put("windows", JSONArray().apply { runCatching { windows.forEach { w ->
+                        put(JSONObject().put("package", w.root?.packageName?.toString() ?: "").put("type", w.type)
+                            .put("active", w.isActive).put("title", w.title?.toString() ?: "")) } } })
+                    .toString().toByteArray())
+                else -> reply(out, 404, "text/plain", "GET /health /shot /tree /foreground; POST /tap /longpress /swipe /scroll /text /key".toByteArray())
             }
         } catch (e: Exception) {
             reply(out, 500, "application/json", JSONObject().put("ok", false).put("error", e.message ?: e.javaClass.simpleName).toString().toByteArray())
