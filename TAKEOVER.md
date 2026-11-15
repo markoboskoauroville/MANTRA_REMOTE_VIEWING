@@ -1,5 +1,21 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 15.11.2026, v59 (the loop-back, Marko: "build a backdoor you can control ... I want to see a big mouse
+pointer ... I need to see feedback on the screen"):** a new **Claude Control door** (`ClaudeControl.kt`) — an
+AccessibilityService that acts on the phone *itself* and paints a BIG white arrow (~48 dp, black outline) that glides
+to the target over ~400 ms before every action, a ripple on a tap, a growing ring on a long-press, an animated
+trail + arrow + `SCROLL ↓` on a swipe/scroll, and a caption strip (`Claude: tapping NDI`); it fades 5 s after the
+last command. Gestures by `dispatchGesture`, screenshot by `takeScreenshot`, `/tree` is the accessibility node
+dump (text + bounds, reliable where uiautomator drops this camera app), keys by `performGlobalAction`. The door is
+HTTP on **port 8790**, bound to every address + 127.0.0.1; the Mac reaches it over `adb forward tcp:8790 tcp:8790`
+(local loop, nothing over the internet). Loopback needs no token; LAN/Tailscale needs `X-Mantra-Token`
+(files/door.token). Mac side: **`rvctl`** (`tools/rvctl.py`, on the PATH): `rvctl pixel tap X Y --label "..."`,
+`swipe`, `scroll dir`, `longpress`, `text`, `key`, `shot`, `tree`, `open-viewer` (scrcpy on that phone, local).
+Manifest rule: MANTRA_MANIFEST modules/phone-control-visible.md. **Enable once by hand**: Settings → Accessibility
+→ "Mantra Remote Viewing — Claude Control" (a toggle, not a dialog Claude may answer). New files:
+ClaudeControl.kt, res/xml/claude_control_service.xml, res/values/strings.xml; service added to the manifest.
+Built by GitHub Actions only.
+
 **State 15.11.2026, v58:** `MachineBubble` (MainActivity.kt): a round 💻 floats over any machine (Mac, VM, phone; not on
 the first page), dragged anywhere, rests on the nearer side, place in prefs bubble_x / bubble_y. A tap lists 📱 THIS
 PHONE · HOME first (hangUp, phone = null, moveTaskToBack: the app leaves, this phone is itself, no viewing of itself),

@@ -54,6 +54,20 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps the owner's developer debugging switched on for his own remote-control tools." />
         </service>
+        <!-- v59: the Claude Control door — the phone acts on itself with a big visible pointer (local loop only).
+             Enabled once by hand in Settings → Accessibility → Mantra Remote Viewing (Claude Control). -->
+        <service
+            android:name=".ClaudeControl"
+            android:exported="false"
+            android:label="Mantra Remote Viewing — Claude Control"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/claude_control_service" />
+        </service>
         <receiver android:name=".KeeperBoot" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

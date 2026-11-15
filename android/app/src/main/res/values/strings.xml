@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="claude_control_desc">Lets Marko\'s Claude Code drive this phone over the local network with a big visible mouse pointer, so he can watch and learn. Local loop only (adb forward / LAN / Tailscale), token-protected, nothing over the internet.</string>
+</resources>

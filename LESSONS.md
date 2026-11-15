@@ -89,3 +89,14 @@ v41 made L/R hold the button down; Marko meant that while L is lit every tap is 
 - The cloud container reaches the Nothing's adb on 5555 through Tailscale: `socat TCP-LISTEN:15555,bind=127.0.0.1,fork
   EXEC:"tailscale --socket=/tmp/ts/sock nc 100.67.149.40 5555"`, then `adb connect 127.0.0.1:15555`. Its fresh adb key
   is unauthorized until Marko taps Allow on the phone; then `adb install -r` of the release APK works (v47 → v52).
+
+## 15.11.2026 — the loop-back (v59)
+- An AccessibilityService can draw its own overlay with `TYPE_ACCESSIBILITY_OVERLAY` and NO SYSTEM_ALERT_WINDOW grant;
+  it sits above everything. Config needs `canPerformGestures`, `canTakeScreenshot`, `canRetrieveWindowContent`.
+- `dispatchGesture` delivers its callback on the handler you pass. If you pass the main handler, you must NOT block the
+  main thread waiting for it (deadlock): run the gesture + its await on a worker thread, pointer glide on main.
+- The phone acting on ITSELF is the "loop inside the phone" Marko meant: no VNC, no internet. The Mac reaches the door
+  over `adb forward` (USB fully local; adb-over-Tailscale only when away). Loopback (adb forward) is trusted, no token.
+- The big pointer is painted on the phone, so ANY mirror (scrcpy, Android viewer, Mac viewer) shows it — one overlay
+  serves every watcher.
+- `/tree` (accessibility node dump) is the reliable way to find coordinates: uiautomator drops nodes on this camera app.
