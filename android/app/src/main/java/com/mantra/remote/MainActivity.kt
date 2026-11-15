@@ -149,9 +149,9 @@ private fun helpText(label: String): String {
         l == "EXIT" -> "Leaves full screen."
         l == "APPS" -> "The view moves to the middle of the next open window on the Mac, at the zoom you have, on either screen: left to right, then around again. A long press: the window before. That app comes to the front on the Mac, so the next key (NEW TAB, ⇥, typing) goes to it."
         l.startsWith("VIEW") -> "View only: the mouse does not reach the Mac: no click, no drag, no scroll. You can watch, zoom and move around the picture; one finger moves the zoomed picture. The keys still work: ESC, DOCK, ⇥ (next tab), typing, every key. Tap again to use the mouse on the Mac."
-        l == "⌘" -> "Command, held down on the Mac while it is lit. Tap it on, then TAB, TAB, TAB walks the app switcher; tap it off to choose. ⌘ on, then Q, then ⌘ off quits an app."
-        l == "⌥" -> "Option. Tap it, then the next key: they are pressed together. It turns off after one use."
-        l == "⌃" || l == "^" -> "Control. Tap it, then the next key: they are pressed together. It turns off after one use."
+        l == "⌘" -> "Command: a tap presses it down on the Mac (lit). The next key or click goes with it, then it is let go. A second tap on it lets it go without a key. ⌃ ⌥ ⌘ can be down together: ⌥ ⌘ then D."
+        l == "⌥" -> "Option: a tap presses it down on the Mac (lit). The next key or click goes with it, then it is let go. A second tap on it lets it go without a key."
+        l == "⌃" || l == "^" -> "Control: a tap presses it down on the Mac (lit). The next key or click goes with it, then it is let go. A second tap on it lets it go without a key."
         l == "⇧" -> "Shift. Tap it, then the next key: they are pressed together. It turns off after one use."
         l == "ESC" -> "Escape: closes a menu or a dialog, cancels."
         l == "TAB" -> "Tab: the next field. With ⌘ first, it switches between apps."
@@ -872,7 +872,6 @@ private fun Live(s: Session) {
     LaunchedEffect(rfb, viewOnly) { rfb.viewOnly = viewOnly; s.prefs?.edit()?.putBoolean("view_only", viewOnly)?.apply() }
     var keyboard by remember { mutableStateOf(false) }
     val mods = remember { mutableStateOf(setOf<Int>()) }
-    var cmdHeld by remember { mutableStateOf(false) }
     var rx by remember { mutableLongStateOf(0L) }
     var tx by remember { mutableLongStateOf(0L) }
     var kbps by remember { mutableLongStateOf(0L) }
@@ -934,12 +933,19 @@ private fun Live(s: Session) {
         maxOf(viewSize.width / rect[2].toFloat(), viewSize.height / rect[3].toFloat()) / fit() else 1f
     // v26: FIT follows a new picture size and the view (turned sideways, rows shown or hidden), after the reset above
     LaunchedEffect(rfb, monitor, s.fbW, s.fbH, viewSize) { if (fitView) { zoom = coverZoom(); pan = clampPan(Offset(0f, -10000f)) } }
-    fun withMods(block: () -> Unit) {
+    // v56 (Marko, 15.11.2026: "Command, option, and control should behave the same ... when I click them, they are
+    // pressed down. And then I click another key ... they are both released ... second click on any of these three
+    // modifier keys is releasing it"): a modifier tapped goes DOWN on the Mac at once (lit) and stays down; the next key
+    // or click is pressed with it, then every modifier that is down is let go; a second tap lets that one go alone.
+    fun releaseMods() {
         val m = mods.value
-        m.forEach { rfb.key(it, true) }
-        block()
+        if (m.isEmpty()) return
+        mods.value = emptySet()
         m.reversed().forEach { rfb.key(it, false) }
-        if (m.isNotEmpty()) mods.value = emptySet()
+    }
+    fun withMods(block: () -> Unit) {
+        block()
+        releaseMods()
     }
     // what is on its way, shown above the keys until the Mac has it (Marko, 26.10.2026)
     fun travelling(label: String, picture: Boolean = false) {
@@ -960,6 +966,7 @@ private fun Live(s: Session) {
             rfb.pointer(x, y, 0); Thread.sleep(30)
             rfb.pointer(x, y, button); Thread.sleep(50)
             rfb.pointer(x, y, 0); rfb.probe()
+            view.post { releaseMods() }   // v56: a lit modifier goes with the click (⌘-click), then it is let go
         }.start()
     }
     // 🖱 and VIEW ONLY exclude each other: the mouse mode is for clicking, VIEW ONLY for never clicking
@@ -991,23 +998,20 @@ private fun Live(s: Session) {
         withMods { rfb.key(k, true); rfb.key(k, false) }
         rfb.probe()
     }
-    // ⌘ is a toggle held down on the Mac: on, it stays pressed there until tapped off, so ⌘ then TAB, TAB, TAB walks the
-    // app switcher and ⌘ off chooses (Marko, 25.10.2026: "make my Command key a toggle"). ⌥ ⌃ ⇧ stay one-shot.
     fun toggleMod(k: Int) {
-        if (k == K_CMD) { cmdHeld = !cmdHeld; travelling(if (cmdHeld) "⌘ ON" else "⌘ OFF"); rfb.key(K_CMD, cmdHeld); rfb.probe() }
-        else {
-            // ⌃ is also pressed and let go on the Mac at once, so two taps are the Mac's double ⌃ (the Dock Switcher's
-            // square, Marko 25.10.2026: "I double tap, but it does not register"); it still goes with the next key too
-            if (k == K_CTRL && !cmdHeld && !lx) { travelling("⌃"); rfb.key(K_CTRL, true); rfb.key(K_CTRL, false); rfb.probe() }
-            mods.value = if (k in mods.value) mods.value - k else mods.value + k
-        }
+        val name = MOD_KEYS.firstOrNull { it.second == k }?.first ?: "MOD"
+        if (k in mods.value) { mods.value = mods.value - k; rfb.key(k, false); travelling("$name UP") }
+        else { mods.value = mods.value + k; rfb.key(k, true); travelling("$name DOWN") }
+        rfb.probe()
     }
-    fun modOn(k: Int) = if (k == K_CMD) cmdHeld else k in mods.value
-    fun releaseCmd() { if (cmdHeld) { cmdHeld = false; rfb.key(K_CMD, false) } }
+    fun modOn(k: Int) = k in mods.value
+    fun releaseCmd() = releaseMods()
+    // nothing stays pressed on the Mac when this screen goes (BACK TO LOGIN, the phone, the app closed)
+    DisposableEffect(rfb) { onDispose { runCatching { mods.value.forEach { rfb.key(it, false) } } } }
     // NEXT TAB ▶: ⌘⇧], the next tab in Chrome and in iTerm alike, so the phone need not know which app is in front
     // (Marko, 25.10.2026: "go through the tabs", then "the same shortcut doesn't work in iTerm"). Ctrl-Tab was Chrome's only.
     fun nextTab() {
-        mods.value = emptySet(); cmdHeld = false
+        releaseMods()
         travelling("⇥ NEXT TAB")
         // v21: Chrome on Linux: Ctrl+Tab
         if (lx) { rfb.key(K_CTRL, true); rfb.key(K_TAB, true); rfb.key(K_TAB, false); rfb.key(K_CTRL, false); rfb.probe(); return }
@@ -1020,14 +1024,14 @@ private fun Live(s: Session) {
     // v54 (Marko, 14.11.2026: "action button at the first row, which is space button. Command v."): PASTE = ⌘V
     // (Ctrl+V on the Linux machine); SPACE goes through tapKey, so a lit modifier joins it
     fun paste() {
-        mods.value = emptySet(); releaseCmd()
+        releaseMods()
         travelling("⌘V PASTE")
         val m = if (lx) K_CTRL else K_CMD
         rfb.key(m, true); rfb.key(K_V, true); rfb.key(K_V, false); rfb.key(m, false)
         rfb.probe()
     }
     fun newTab() {
-        mods.value = emptySet(); releaseCmd()
+        releaseMods()
         travelling("+ NEW TAB")
         val m = if (lx) K_CTRL else K_CMD
         rfb.key(m, true); rfb.key(K_T, true); rfb.key(K_T, false); rfb.key(m, false)
@@ -1039,7 +1043,7 @@ private fun Live(s: Session) {
     // Screen Sharing never delivers it (tried 26.10.2026). The pause makes the two taps two, as his finger would.
     // the old way, ⌃⌃ on the Mac: still there when the Dock Switcher's listener does not answer
     fun dockOnMac() {
-        mods.value = emptySet(); releaseCmd()
+        releaseMods()
         travelling("DOCK")
         Thread {
             rfb.key(K_CTRL, true); rfb.key(K_CTRL, false)
@@ -1078,7 +1082,7 @@ private fun Live(s: Session) {
         rfb.probe()
     }
     fun dockHiding() {
-        mods.value = emptySet(); releaseCmd()
+        releaseMods()
         val host = s.sisterHost.ifEmpty { MacFinder.MAC_TAILSCALE_IP }
         val before = dockBefore
         if (before == null) {
@@ -1210,7 +1214,7 @@ private fun Live(s: Session) {
         travelling("MENU BAR")
         Thread { if (MacSister.menu(sisterHost())) s.landed() else s.pressed = "MENU: THE MAC DID NOT ANSWER" }.start()
     }
-    fun menuOn() { menuMode = true; mods.value = emptySet(); releaseCmd(); openMenu() }
+    fun menuOn() { menuMode = true; releaseMods(); openMenu() }
     fun menuOff() {
         menuMode = false
         travelling("MENU CLOSED")
@@ -1456,7 +1460,7 @@ private fun Live(s: Session) {
     // v28 the pure ⌘ on the Linux machine: Super pressed and let go alone, which opens the VM's dock (chromium-vm-dock
     // watches for a lone Super_L, the same as the Mac viewer's lone ⌘)
     fun cmdAlone() {
-        mods.value = emptySet()
+        releaseMods()
         travelling("⌘")
         rfb.key(K_CMD, true); rfb.key(K_CMD, false); rfb.probe()
     }
@@ -1474,24 +1478,32 @@ private fun Live(s: Session) {
     }
     // v26 (Marko, 5.11.2026: "Escape should be the first button on the left side, and then Control Alt Shift ... Remove
     // Shift", "a dedicated button which will be Command Tab to switch between applications")
-    val specialKeys = listOf("TAB" to K_TAB, "⏎" to K_RETURN, "⌫" to K_BACKSPACE,
-        "←" to K_LEFT, "↑" to K_UP, "↓" to K_DOWN, "→" to K_RIGHT)
+    val specialKeys = listOf("⏎" to K_RETURN, "⌫" to K_BACKSPACE, "␣" to K_SPACE, "TAB" to K_TAB,
+        "↑" to K_UP, "↓" to K_DOWN, "←" to K_LEFT, "→" to K_RIGHT)
     val keysRow: @Composable () -> Unit = {
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Key("ESC", Modifier.width(60.dp), size = 18, padH = 10) { tapKey(K_ESC) }
+            // v56 (Marko, 15.11.2026: "Escape and then all these three modifiers ... same order ... on the Mac keyboard, and
+            // then rearrange the rest ... by the frequency of use"): ESC ⌃ ⌥ ⌘, then what a day in iTerm (Claude) and
+            // Chrome asks most: ⏎ answers, ⌫ corrects, ␣ separates, ⌘V pastes, ↑ ↓ walk history and choices, TAB
+            // completes, NEW TAB, then ← → (the cursor moves least: a tap does it better)
+            Key("ESC", Modifier.width(56.dp), size = 18, padH = 6) { tapKey(K_ESC) }
+            modKeys()
+            // v28: the Linux machine gets a pure ⌘ (Super alone = its dock)
+            if (lx) Key("⌘", Modifier.width(56.dp), size = 20, sub = "command") { cmdAlone() }
+            Key("⏎", Modifier.width(52.dp), size = 18, padH = 2) { tapKey(K_RETURN) }
+            Key("⌫", Modifier.width(52.dp), size = 18, padH = 2) { tapKey(K_BACKSPACE) }
+            Key("␣", Modifier.width(64.dp), size = 20, sub = "SPACE") { tapKey(K_SPACE) }
+            Key("⌘V", Modifier.width(56.dp), size = 16, sub = "PASTE") { paste() }
+            Key("↑", Modifier.width(52.dp), size = 18, padH = 2) { tapKey(K_UP) }
+            Key("↓", Modifier.width(52.dp), size = 18, padH = 2) { tapKey(K_DOWN) }
+            Key("TAB", Modifier.width(60.dp), size = 18, padH = 6) { tapKey(K_TAB) }
             // v52 (Marko, 14.11.2026: "one key to open the new tab in iTerm ... same shortcut also Chrome")
             Key("NEW", Modifier.width(56.dp), size = 16, sub = "TAB") { newTab() }
-            Key("␣", Modifier.width(70.dp), size = 20, sub = "SPACE") { tapKey(K_SPACE) }
-            Key("⌘V", Modifier.width(56.dp), size = 16, sub = "PASTE") { paste() }
-            modKeys()
-            // v28 (Marko, 5.11.2026: "on action row at the top i need to have command only, pure command button"):
-            // ⌘TAB is gone; the Mac has its ⌘ toggle in modKeys, the Linux machine gets a pure ⌘ (Super alone = its dock)
-            if (lx) Key("⌘", Modifier.width(56.dp), size = 20, sub = "command") { cmdAlone() }
-            // ⏎ in a narrow frame, so the whole first row stands inside the phone's 413 dp, ⏎ included (Marko, 26.10.2026)
-            specialKeys.forEach { (label, k) -> Key(label, Modifier.width(if (k == K_RETURN) 36.dp else 60.dp), size = 18, padH = if (k == K_RETURN) 2 else 10) { tapKey(k) } }
+            Key("←", Modifier.width(52.dp), size = 18, padH = 2) { tapKey(K_LEFT) }
+            Key("→", Modifier.width(52.dp), size = 18, padH = 2) { tapKey(K_RIGHT) }
         }
     }
     fun typeChars(text: String) = text.forEach { ch ->
@@ -1515,7 +1527,7 @@ private fun Live(s: Session) {
     // screen) or does not answer, the password is typed into whatever has the focus and Return, as before.
     fun login() {
         if (s.loginPassword.isEmpty()) return
-        mods.value = emptySet(); releaseCmd()
+        releaseMods()
         val pw = s.loginPassword
         val main = android.os.Handler(android.os.Looper.getMainLooper())
         s.note("LOGIN: LOOKING FOR THE DIALOG ON THE MAC", bad = false)
@@ -1708,17 +1720,18 @@ private fun Live(s: Session) {
             // the CAMERA language (MANTRA_MANIFEST language-camera.md): the picture is sacred, the keys are words in
             // the black bands beside it, their colour is their state. Left: what to press. Right: where to look (swapped at Marko's word, 25.10.2026).
             Column(Modifier.width(76.dp).fillMaxHeight()) {
-                if (!lx) RailKey("LOGIN", null, if (s.loginPassword.isEmpty()) RailState.DEAD else RailState.OFF) { login() }
+                // v56: ESC ⌃ ⌥ ⌘ as on the Mac, then by use; LOGIN at the bottom
+                RailKey("ESC", null, RailState.OFF) { tapKey(K_ESC) }
                 modList.forEach { (label, k, name) ->
-                    RailKey(label, name, if (k == K_CMD && cmdHeld) RailState.ON else if (modOn(k)) RailState.ARMED else RailState.OFF) { toggleMod(k) }
+                    RailKey(label, name, if (modOn(k)) RailState.ON else RailState.OFF) { toggleMod(k) }
                 }
                 if (lx) RailKey("⌘", "command", RailState.OFF) { cmdAlone() }
-                RailKey("ESC", null, RailState.OFF) { tapKey(K_ESC) }
-                RailKey("TAB", null, RailState.OFF) { tapKey(K_TAB) }
                 RailKey("⏎", null, RailState.OFF) { tapKey(K_RETURN) }
                 RailKey("⌫", null, RailState.OFF) { tapKey(K_BACKSPACE) }
                 RailKey("SPACE", null, RailState.OFF) { tapKey(K_SPACE) }
                 RailKey("⌘V", "PASTE", RailState.OFF) { paste() }
+                RailKey("TAB", null, RailState.OFF) { tapKey(K_TAB) }
+                if (!lx) RailKey("LOGIN", null, if (s.loginPassword.isEmpty()) RailState.DEAD else RailState.OFF) { login() }
             }
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 screen(Modifier.fillMaxSize())
@@ -1757,7 +1770,7 @@ private fun Live(s: Session) {
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { if (!lx) monitors(Modifier.weight(1f)); close() }
                 meter()
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { modKeys() }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { Key("ESC", Modifier.width(56.dp), size = 18, padH = 6) { tapKey(K_ESC) }; modKeys() }
                 specialKeys.chunked(4).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         row.forEach { (label, k) -> Key(label, Modifier.weight(1f), size = 18) { tapKey(k) } }

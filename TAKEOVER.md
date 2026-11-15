@@ -1,5 +1,10 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 15.11.2026, v56:** ⌃ ⌥ ⌘ all behave alike: a tap sends key DOWN to the Mac (lit, `mods`), the next key, typed
+letter or click goes with them, then all are let go (`releaseMods`); a second tap on a lit one lets it go alone. The old
+⌘ toggle (`cmdHeld`, ⌘ TAB TAB walking) and ⌃'s instant tap (⌃⌃ by two taps) are gone. Row 1: ESC ⌃ ⌥ ⌘ ⏎ ⌫ ␣ ⌘V ↑ ↓ TAB
+NEW TAB ← →; the full-screen left rail ESC ⌃ ⌥ ⌘ ⏎ ⌫ SPACE ⌘V TAB LOGIN.
+
 **State 15.11.2026, v55:** beside 🖱 the MOVE key became **CLICK**: a short press = mouseClick(1) at the pointer, a long
 press locks / unlocks MOVE (`moveOnly`, lit, sub MOVE LOCK; taps only move the pointer). Same on the full-screen rail.
 
