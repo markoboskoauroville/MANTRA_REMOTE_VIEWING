@@ -283,3 +283,6 @@ stopped, a tap starts or stops, core rows locked; VMCTL TOKEN pasted once (priva
 
 "please build a backdoor you can control. Actually, not the tail scale application. Call it Remote Viewing, and I want now that we do this loop back. That's what I want. Every time you control my phones, you are going to open this Remote Viewer. Open the same phone over the network, the local network. You need to build a local network loop inside the phone, so nothing is spent over the internet, and do the things inside the Remote Viewer. I want to see a big mouse pointer, and I want to see indication that you are scrolling, whatever you are doing. I need to see feedback on the screen. Find a way to do this by modifying Remote Viewer"
 **Status:** saved first.
+
+15.11.2026, Marko (after v59): "We are not doing this, like you said. I open Mantra Remote Viewing, and if accessibility is not enabled, it needs to put me a link to get to accessibility and open the right part of settings. I just need to enable things as we do on other apps. We do it the same with TTT. Please make this available"
+**Status:** saved first.
