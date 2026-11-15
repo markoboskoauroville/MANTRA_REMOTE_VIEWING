@@ -85,6 +85,11 @@ fun PhoneScreen(phone: Phone, pin: String = "", onMac: () -> Unit) {
     // from the left or right edge (or Android's own back swipe) opens; MOUSE is still in the menu
     var mouse by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    // v57 (Marko, 15.11.2026: "add rotation to the action buttons of remote viewing phones so I can force it to be
+    // landscape or portrait"): ⟳ in the menu steps AUTO → PORTRAIT → LANDSCAPE on the far phone (its rotation lock,
+    // remembered per phone, set again on every connect); this phone stands the way the far picture stands
+    val rotPrefs = remember { context.getSharedPreferences("mantra_phone_rotation", android.content.Context.MODE_PRIVATE) }
+    var rotation by remember { mutableIntStateOf(rotPrefs.getInt(phone.address, ROT_AUTO)) }
     var keyboard by remember { mutableStateOf(false) }
     var px by remember { mutableStateOf(0.5f) }
     var py by remember { mutableStateOf(0.5f) }
@@ -116,6 +121,20 @@ fun PhoneScreen(phone: Phone, pin: String = "", onMac: () -> Unit) {
     DisposableEffect(phone.address) { onDispose { link?.stop(); link = null } }
     // v16: a phone is reached through Tailscale: switched on here too (the Mac's FIRST SCREEN or a fresh start leave it off)
     LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Tailscale.onAndWait(context.applicationContext) } }
+    fun applyRotation(a: AdbLink, r: Int) {
+        val cmd = when (r) {
+            ROT_PORTRAIT -> "settings put system accelerometer_rotation 0; settings put system user_rotation 0"
+            ROT_LANDSCAPE -> "settings put system accelerometer_rotation 0; settings put system user_rotation 1"
+            else -> "settings put system accelerometer_rotation 1"
+        }
+        Thread { a.shell(cmd) }.start()
+    }
+    LaunchedEffect(rotation) { rotPrefs.edit().putInt(phone.address, rotation).apply(); link?.takeIf { it.connected }?.let { applyRotation(it, rotation) } }
+    // this phone turns with the far picture: wider than tall = sideways
+    LaunchedEffect(w, h) {
+        if (w > 0 && h > 0) activity?.requestedOrientation =
+            if (w > h) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
     // the status line: what arrives, every second, as on the Mac's
     LaunchedEffect(link) {
         var last = 0L to 0L
@@ -126,6 +145,7 @@ fun PhoneScreen(phone: Phone, pin: String = "", onMac: () -> Unit) {
             // v16: the first moment the link is up, a locked phone is opened with its PIN (entered on the first screen)
             if (a.connected && !unlockTried) {
                 unlockTried = true
+                if (rotation != ROT_AUTO) applyRotation(a, rotation)
                 val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { a.unlock(pin) }
                 if (!ok) status = if (pin.isEmpty()) "${phone.name} IS LOCKED: its PIN on the first screen opens it" else "${phone.name}: THE PIN DID NOT OPEN IT"
             }
@@ -282,6 +302,9 @@ fun PhoneScreen(phone: Phone, pin: String = "", onMac: () -> Unit) {
                 PhoneKey(if (mouse) "MOUSE (TAP: TOUCH)" else "TOUCH (TAP: MOUSE)", Modifier.weight(2f)) { mouse = !mouse; menu = false }
                 PhoneKey("⌨", Modifier.weight(1f)) { keyboard = !keyboard; menu = false }
             }
+            // stays open, so a second tap steps on to the next way
+            PhoneKey("⟳ " + when (rotation) { ROT_PORTRAIT -> "PORTRAIT"; ROT_LANDSCAPE -> "LANDSCAPE"; else -> "AUTO (TURNS ITSELF)" },
+                Modifier.fillMaxWidth()) { rotation = (rotation + 1) % 3 }
             androidx.compose.material3.Text(status, color = Color(0xFF7FE0E6), fontSize = androidx.compose.ui.unit.TextUnit(12f, androidx.compose.ui.unit.TextUnitType.Sp),
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, maxLines = 4, modifier = Modifier.fillMaxWidth().padding(4.dp))
         }
@@ -317,6 +340,10 @@ private fun PhoneKey(label: String, modifier: Modifier, onClick: () -> Unit) {
 private const val SPEED = 1.6f
 private const val HOLD_MS = 350L
 private const val SLOP_PX = 24f
+/** v57: the far phone's rotation */
+private const val ROT_AUTO = 0
+private const val ROT_PORTRAIT = 1
+private const val ROT_LANDSCAPE = 2
 /** v53: how near the left or right edge a finger must land, and how far inward it must go, to open the menu */
 private const val EDGE_DP = 24f
 private const val SWIPE_PX = 60f

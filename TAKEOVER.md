@@ -1,5 +1,10 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 15.11.2026, v57:** a phone's menu (edge swipe) has ⟳: AUTO → PORTRAIT → LANDSCAPE on the far phone by adb
+shell (`settings put system accelerometer_rotation 0/1`, `user_rotation 0/1`), remembered per address (prefs file
+mantra_phone_rotation) and set again on every connect. This phone turns with the far picture (wider than tall =
+sensor landscape). Apps that fix their own orientation ignore the lock.
+
 **State 15.11.2026, v56:** ⌃ ⌥ ⌘ all behave alike: a tap sends key DOWN to the Mac (lit, `mods`), the next key, typed
 letter or click goes with them, then all are let go (`releaseMods`); a second tap on a lit one lets it go alone. The old
 ⌘ toggle (`cmdHeld`, ⌘ TAB TAB walking) and ⌃'s instant tap (⌃⌃ by two taps) are gone. Row 1: ESC ⌃ ⌥ ⌘ ⏎ ⌫ ␣ ⌘V ↑ ↓ TAB
