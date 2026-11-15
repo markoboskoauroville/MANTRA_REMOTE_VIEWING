@@ -129,7 +129,7 @@ private fun helpText(label: String): String {
         l == "✕" -> "Closes the link to the Mac and goes back to the settings page."
         l.contains("KEYS") || l == "⌨" -> "Opens the phone's keyboard. What you type is typed on the Mac."
         l == "🖱" || l == "MOUSE" -> "MOUSE: while it is lit, the screen is the Mac's mouse: a tap clicks where the finger touches, a tap of two fingers right-clicks where they touch, one finger moved moves the pointer. Spreading, pinching and three-finger panning still work. MOVE beside it: the finger only moves the pointer, no click."
-        l == "MOVE" -> "MOVE (with MOUSE on): while it is lit, a tap only moves the Mac's pointer to the finger, it never clicks: for aiming. Three fingers tapped together click, two fingers tapped together right-click, where the pointer stands. Tap MOVE again: taps click again."
+        l == "CLICK" || l == "MOVE" -> "CLICK (beside MOUSE): a short press clicks where the pointer stands. A long press locks MOVE (lit): a tap on the screen then only moves the pointer, it never clicks, for aiming; press CLICK to click there. Three fingers tapped together click, two fingers right-click, at the pointer. Another long press unlocks: taps click again."
         l == "SPACE" || l == "␣" -> "Space: one space, as the space bar on the Mac's keyboard (with ⌘ lit: ⌘Space, Spotlight)."
         l == "⌘V" -> "Paste: ⌘V on the Mac (Ctrl+V on the Linux machine), what was copied on the Mac goes where the cursor is."
         l == "NEW" -> "A new tab in the app in front: iTerm, Chrome, Safari, Finder (⌘T on the Mac; Ctrl+T on the Linux machine). After APPS the app you see is the one in front, so the tab opens there."
@@ -983,7 +983,7 @@ private fun Live(s: Session) {
         }.start()
     }
     fun toggleDrag() { toggleHold(1) }
-    fun toggleMove() { moveOnly = !moveOnly; travelling(if (moveOnly) "MOVE: TAPS DO NOT CLICK" else "MOUSE: TAP CLICKS") }
+    fun toggleMove() { moveOnly = !moveOnly; travelling(if (moveOnly) "MOVE LOCKED: TAPS DO NOT CLICK" else "MOVE UNLOCKED: TAP CLICKS") }
     fun setMouse(on: Boolean) { mouseMode = on; if (on) { scrollMode = false; viewOnly = false } else { if (held != 0) toggleHold(held) } }
     LaunchedEffect(Unit) { if (mouseMode && viewOnly) viewOnly = false }
     fun tapKey(k: Int) {
@@ -1545,7 +1545,9 @@ private fun Live(s: Session) {
         // v17: 🖱 beside ⌨ (Marko, 27.10.2026: "a keyboard icon ... and next to it there must be a mouse icon")
         Key("🖱", modifier, active = mouseMode, size = 24, padH = ROW_PAD) { setMouse(!mouseMode) }
         if (mouseMode) {
-            Key("MOVE", Modifier.weight(1f), active = moveOnly, size = 14, sub = if (moveOnly) "NO CLICK" else "TAP=CLICK", padH = 2) { toggleMove() }
+            // v55 (Marko, 15.11.2026: "a button to click the mouse. If I long press, I lock it, then it's mouse move only"):
+            // a short press = one click at the pointer, a long press locks / unlocks MOVE (taps only move the pointer)
+            Key("CLICK", Modifier.weight(1f), active = moveOnly, size = 14, sub = if (moveOnly) "MOVE LOCK" else "HOLD=MOVE", padH = 2, onLongClick = { toggleMove() }) { mouseClick(1) }
             Key("D", Modifier.weight(0.6f), active = dragHeld, size = 18, sub = "DRAG", padH = 2) { toggleDrag() }
         }
     }
@@ -1731,7 +1733,7 @@ private fun Live(s: Session) {
                 RailKey("KEYS", null, if (keyboard) RailState.ON else RailState.OFF) { keyboard = !keyboard }
                 RailKey("MOUSE", null, if (mouseMode) RailState.ON else RailState.OFF) { setMouse(!mouseMode) }
                 if (mouseMode) {
-                    RailKey("MOVE", if (moveOnly) "NO CLICK" else "TAP=CLICK", if (moveOnly) RailState.ON else RailState.OFF) { toggleMove() }
+                    RailKey("CLICK", if (moveOnly) "MOVE LOCK" else "HOLD=MOVE", if (moveOnly) RailState.ON else RailState.OFF, onLongClick = { toggleMove() }) { mouseClick(1) }
                     RailKey("D", "DRAG", if (dragHeld) RailState.ON else RailState.OFF) { toggleDrag() }
                 }
                 RailKey("NEW", "TAB", RailState.OFF) { newTab() }

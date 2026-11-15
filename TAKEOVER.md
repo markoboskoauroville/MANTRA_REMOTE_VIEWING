@@ -1,5 +1,8 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 15.11.2026, v55:** beside 🖱 the MOVE key became **CLICK**: a short press = mouseClick(1) at the pointer, a long
+press locks / unlocks MOVE (`moveOnly`, lit, sub MOVE LOCK; taps only move the pointer). Same on the full-screen rail.
+
 **State 14.11.2026, v54:** row 1 has ␣ SPACE (tapKey(K_SPACE), a lit modifier joins it) and ⌘V PASTE (Ctrl+V on the
 VM) after NEW TAB; in full screen both are on the left rail under ⌫.
 
