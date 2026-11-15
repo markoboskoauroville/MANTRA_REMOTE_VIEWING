@@ -39,23 +39,26 @@ ADB = os.environ.get("ADB", os.path.expanduser("~/Library/Android/sdk/platform-t
 if not os.path.exists(ADB):
     ADB = "adb"
 DOOR_PORT = 8790
-LOCAL_PORT = 8790  # Mac side of the adb forward
+LOCAL_PORT = 8790  # Mac side of the adb forward; each phone its own (cfg "port"), so two phones never cross
 
 # Each phone: adb targets tried in order (most-local first), the scrcpy window title, and the screen helper script.
 PHONES = {
     "pixel": {
         "targets": ["41241FDH2S10SJ", "192.168.1.101:5555", "100.70.23.53:5555"],
         "title": "PIXEL 7 · REMOTE VIEWING",
+        "port": 8790,
         "screen": "pixel-screen",
     },
     "emu": {   # the Pixel_7_API_35 emulator, for tests that must not touch Marko's phones
         "targets": ["emulator-5554"],
         "title": "PIXEL 7 EMULATOR",
+        "port": 8792,
         "screen": "",
     },
     "nothing": {
         "targets": ["0005534BC000140", "100.67.149.40:5555"],
         "title": "NOTHING · REMOTE VIEWING",
+        "port": 8791,
         "screen": "nothing-screen",
     },
 }
@@ -86,12 +89,12 @@ def _pick_target(phone):
     sys.exit(f"{phone}: no adb target answered (tried {', '.join(cfg['targets'])}). Plug it in, or `nothing-adb arm`.")
 
 
-def _forward(target):
+def _forward(target, port=LOCAL_PORT):
     """Open a local loop to the phone's door; returns the Mac URL base. Nothing leaves the machine but over adb."""
-    r = _adb(target, "forward", f"tcp:{LOCAL_PORT}", f"tcp:{DOOR_PORT}")
+    r = _adb(target, "forward", f"tcp:{port}", f"tcp:{DOOR_PORT}")
     if r.returncode != 0:
         sys.exit(f"adb forward failed: {r.stderr.strip()}")
-    return f"http://127.0.0.1:{LOCAL_PORT}"
+    return f"http://127.0.0.1:{port}"
 
 
 def _req(base, path, data=None, timeout=20, raw=False):
@@ -170,7 +173,7 @@ def main(argv):
         open_viewer(phone, cfg)
         return 0
 
-    base = _forward(target)
+    base = _forward(target, cfg.get("port", LOCAL_PORT))
 
     if cmd == "health":
         print(json.dumps(_req(base, "/health"), indent=2)); return 0
