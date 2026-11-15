@@ -24,6 +24,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -547,7 +550,85 @@ private fun App(prefs: android.content.SharedPreferences, session: Session) {
     }
     // v16: a phone on the whole screen, over the Mac or over the first screen (a phone needs no Mac); v53: outside the
     // safe-area padding, so its picture reaches every edge of the glass
-    session.phone?.let { p -> PhoneScreen(p, pin = Secrets.pin(prefs, p.address), onMac = { session.phone = null }) }
+    // keyed by the address, so a switch from one phone to another starts a fresh link for the new one
+    session.phone?.let { p -> androidx.compose.runtime.key(p.address) { PhoneScreen(p, pin = Secrets.pin(prefs, p.address), onMac = { session.phone = null }) } }
+    // v58: the floating machine switcher, over every machine
+    if (session.phone != null || session.phase != Phase.SETUP) MachineBubble(session)
+}
+
+/**
+ * v58 (Marko, 15.11.2026: "easy way to switch between machines always, in whichever machine I am ... one circle ...
+ * floating ... I can push it around ... when I tap on it, it opens the list of all my machines in Tailscale ... if I
+ * switch to my host machine, then it exits the remote viewer, and I'm in my home machine"): a round 💻 over the picture,
+ * dragged anywhere (its place remembered); a tap lists THIS PHONE first, then every machine of the tailnet. A machine
+ * is entered as from the first page; THIS PHONE closes the link and leaves the app, so this phone is simply itself.
+ */
+@Composable
+private fun MachineBubble(s: Session) {
+    val context = LocalContext.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var open by remember { mutableStateOf(false) }
+    var places by remember { mutableStateOf<List<Tailnet.Place>?>(null) }
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val sizePx = with(density) { 52.dp.toPx() }
+        val maxX = (constraints.maxWidth - sizePx).coerceAtLeast(0f)
+        val maxY = (constraints.maxHeight - sizePx).coerceAtLeast(0f)
+        // its place as fractions of the screen, so turning the phone keeps it on the same side
+        var fx by remember { mutableStateOf(s.prefs?.getFloat("bubble_x", 1f) ?: 1f) }
+        var fy by remember { mutableStateOf(s.prefs?.getFloat("bubble_y", 0.35f) ?: 0.35f) }
+        if (open) {
+            LaunchedEffect(Unit) {
+                places = null
+                places = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { s.app?.let { Tailnet.places(it, s.prefs) } ?: emptyList() }
+            }
+            Column(
+                Modifier.fillMaxSize().background(Color(0xE6000000))
+                    .pointerInput(Unit) { detectTapGestures { open = false } }
+                    .safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                T("SWITCH MACHINE", AmberGlow, 16)
+                Key("📱 THIS PHONE · HOME (LEAVE THE VIEWER)", Modifier.fillMaxWidth(), size = 13) {
+                    open = false
+                    s.phone = null
+                    if (s.phase != Phase.SETUP) s.hangUp()
+                    (context as? android.app.Activity)?.moveTaskToBack(true)
+                }
+                val list = places
+                when {
+                    list == null -> T("> Tailscale is reading your machines …", AmberDim, 12)
+                    list.isEmpty() -> T("> no other machine answers", RedAlert, 12)
+                    else -> list.forEach { pl ->
+                        val now = s.isCurrent(pl)
+                        val icon = when (pl.kind) { Tailnet.Kind.MAC -> "💻"; Tailnet.Kind.PHONE -> "📱"; Tailnet.Kind.LINUX -> "🖥"; else -> "▪" }
+                        Key("$icon " + (if (pl.online) "● " else "○ ") + pl.name + if (now) "  (NOW)" else "", Modifier.fillMaxWidth(), active = now, size = 13) {
+                            if (!now) { open = false; s.enter(pl) } else open = false
+                        }
+                    }
+                }
+                Key("✕ CLOSE", Modifier.fillMaxWidth(), size = 13) { open = false }
+            }
+        } else Box(
+            Modifier
+                .offset { IntOffset((fx * maxX).roundToInt(), (fy * maxY).roundToInt()) }
+                .size(52.dp)
+                .background(Color(0x99000000), androidx.compose.foundation.shape.CircleShape)
+                .border(1.5.dp, AmberGlow.copy(alpha = 0.7f), androidx.compose.foundation.shape.CircleShape)
+                .pointerInput(maxX, maxY) {
+                    detectDragGestures(onDragEnd = {
+                        // it rests against the nearer side, as a floating key does
+                        fx = if (fx < 0.5f) 0f else 1f
+                        s.prefs?.edit()?.putFloat("bubble_x", fx)?.putFloat("bubble_y", fy)?.apply()
+                    }) { change, d ->
+                        change.consume()
+                        if (maxX > 0) fx = (fx + d.x / maxX).coerceIn(0f, 1f)
+                        if (maxY > 0) fy = (fy + d.y / maxY).coerceIn(0f, 1f)
+                    }
+                }
+                .pointerInput(Unit) { detectTapGestures { open = true } },
+            contentAlignment = Alignment.Center,
+        ) { androidx.compose.material3.Text("💻", fontSize = 24.sp) }
+    }
 }
 
 @Composable

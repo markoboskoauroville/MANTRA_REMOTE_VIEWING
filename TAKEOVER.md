@@ -1,5 +1,11 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 15.11.2026, v58:** `MachineBubble` (MainActivity.kt): a round 💻 floats over any machine (Mac, VM, phone; not on
+the first page), dragged anywhere, rests on the nearer side, place in prefs bubble_x / bubble_y. A tap lists 📱 THIS
+PHONE · HOME first (hangUp, phone = null, moveTaskToBack: the app leaves, this phone is itself, no viewing of itself),
+then Tailnet.places (this phone left out), each entered by `Session.enter`. PhoneScreen is now keyed by the address
+(phone → phone switches start a fresh link).
+
 **State 15.11.2026, v57:** a phone's menu (edge swipe) has ⟳: AUTO → PORTRAIT → LANDSCAPE on the far phone by adb
 shell (`settings put system accelerometer_rotation 0/1`, `user_rotation 0/1`), remembered per address (prefs file
 mantra_phone_rotation) and set again on every connect. This phone turns with the far picture (wider than tall =
