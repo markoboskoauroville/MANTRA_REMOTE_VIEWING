@@ -289,3 +289,6 @@ stopped, a tap starts or stops, core rows locked; VMCTL TOKEN pasted once (priva
 
 15.11.2026, Marko (after enabling Claude Control on the Pixel): "now I have a small blob coming up. I didn't invite it. Remove that blob"
 **Status:** saved first. v61: the service no longer asks for the accessibility button.
+
+15.11.2026, Marko (after watching the first real rvctl session): "You broke the rule for eye following. Eye tracing: we need to write skills for eye tracing. If the text is up and the arrow is down, I'm confused. The text should always be above the arrow. Written when you do the clicking."
+**Status:** saved first. v62: the label travels with the pointer, just above the arrow tip.
