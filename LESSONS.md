@@ -100,3 +100,6 @@ v41 made L/R hold the button down; Marko meant that while L is lit every tap is 
 - The big pointer is painted on the phone, so ANY mirror (scrcpy, Android viewer, Mac viewer) shows it — one overlay
   serves every watcher.
 - `/tree` (accessibility node dump) is the reliable way to find coordinates: uiautomator drops nodes on this camera app.
+- v60: `android.settings.ACCESSIBILITY_DETAILS_SETTINGS` is refused to an ordinary app on the Pixel (Android 17), so the
+  fallback runs: ACTION_ACCESSIBILITY_SETTINGS + `:settings:fragment_args_key` = the component (in the intent AND in a
+  `:settings:show_fragment_args` bundle) opens the list with our row highlighted. Seen 15.11.2026.
