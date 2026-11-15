@@ -1,5 +1,13 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 15.11.2026, v60 (Marko: "if accessibility is not enabled, it needs to put me a link ... as we do on other apps
+... the same with TTT"):** the first page shows, while Claude Control is off, an amber card (CLAUDE CONTROL IS OFF ·
+PERMISSIONS, one line "Lets Claude Code operate this phone with a visible pointer, local network only.", button ENABLE
+CLAUDE CONTROL). The button opens `android.settings.ACCESSIBILITY_DETAILS_SETTINGS` for our component, falling back to
+ACTION_ACCESSIBILITY_SETTINGS with `:settings:fragment_args_key` = our component (row highlighted). Enabled = TTT's test
+(component in ENABLED_ACCESSIBILITY_SERVICES), read again on every resume; the card disappears once on.
+(`ClaudeControlPrompt` in MainActivity.kt.)
+
 **State 15.11.2026, v59 (the loop-back, Marko: "build a backdoor you can control ... I want to see a big mouse
 pointer ... I need to see feedback on the screen"):** a new **Claude Control door** (`ClaudeControl.kt`) — an
 AccessibilityService that acts on the phone *itself* and paints a BIG white arrow (~48 dp, black outline) that glides

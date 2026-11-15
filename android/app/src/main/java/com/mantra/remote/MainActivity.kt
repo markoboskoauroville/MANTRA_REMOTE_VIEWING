@@ -749,6 +749,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
             }
             Key("✕", Modifier.width(60.dp), size = 22) { activity?.finish() }   // closes the app: link, service (Tailscale stays on, v32)
         }
+        ClaudeControlPrompt()   // v60: the accessibility link, only while Claude Control is off
         T("── MY MACHINES ─────────────────", Rule, 16)
         val list = online
         if (s.tailscaleDown.isNotEmpty()) {
@@ -2127,4 +2128,63 @@ private fun ServiceRow(sv: VmServices.Service, busy: String?, err: String?, onTa
         }
         T(if (sv.core) "🔒" else if (sv.running) "STOP" else "START", if (sv.core) AmberDim else Amber, 12, bold = true)
     }
+}
+
+
+/**
+ * v60 (Marko, 15.11.2026: "I open Mantra Remote Viewing, and if accessibility is not enabled, it needs to put me a link to
+ * get to accessibility and open the right part of settings ... as we do on other apps. We do it the same with TTT"):
+ * while the Claude Control service is off, an amber PERMISSIONS card with one line and ENABLE CLAUDE CONTROL, which opens
+ * Settings at our service (its row highlighted). Read again on every resume; it disappears once he switched it on.
+ */
+@Composable
+private fun ClaudeControlPrompt() {
+    val ctx = LocalContext.current
+    var on by remember { mutableStateOf(claudeControlEnabled(ctx)) }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) on = claudeControlEnabled(ctx)
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    if (on) return
+    Column(
+        Modifier.fillMaxWidth().border(1.dp, Amber).background(BgRaised).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(Modifier.fillMaxWidth()) {
+            T("CLAUDE CONTROL IS OFF", AmberGlow, 14, bold = true, modifier = Modifier.weight(1f))
+            T("PERMISSIONS", Amber, 13, bold = true)
+        }
+        T("Lets Claude Code operate this phone with a visible pointer, local network only.", Color(0xFFF2DDB4), 14)
+        Key("ENABLE CLAUDE CONTROL", Modifier.fillMaxWidth(), size = 15) { openClaudeControlSettings(ctx) }
+    }
+}
+
+private const val CLAUDE_CONTROL = "com.mantra.remote/com.mantra.remote.ClaudeControl"
+
+/** The same test as TTT: is our component in ENABLED_ACCESSIBILITY_SERVICES? */
+private fun claudeControlEnabled(c: Context): Boolean {
+    val list = android.provider.Settings.Secure.getString(c.contentResolver,
+        android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+    val mine = android.content.ComponentName(c, ClaudeControl::class.java)
+    return list.split(':').any { android.content.ComponentName.unflattenFromString(it) == mine }
+}
+
+/** Settings straight at our service (Android 11+ details page), else the accessibility list with our row highlighted. */
+private fun openClaudeControlSettings(c: Context) {
+    val comp = android.content.ComponentName(c, ClaudeControl::class.java).flattenToString()
+    val args = Bundle().apply { putString(":settings:fragment_args_key", comp) }
+    val details = android.content.Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS")
+        .putExtra(android.content.Intent.EXTRA_COMPONENT_NAME, comp)
+        .putExtra(":settings:fragment_args_key", comp)
+        .putExtra(":settings:show_fragment_args", args)
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    val list = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        .putExtra(":settings:fragment_args_key", comp)
+        .putExtra(":settings:show_fragment_args", args)
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    if (runCatching { c.startActivity(details) }.isFailure) runCatching { c.startActivity(list) }
 }
