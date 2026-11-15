@@ -1,5 +1,7 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 15.11.2026, v62 (eye tracing, Marko: "The text should always be above the arrow. Written when you do the clicking."):** the caption strip at the top is gone; the label rides WITH the pointer in a dark pill (19 dp bold), centred on the tip, 24 dp above it, clamped inside the screen, just under the arrow only when there is no room above. During a swipe/scroll the pointer rides the trail head, so the words stay over the moving arrow (`drawLabel` in ClaudeControl.kt). Rule: MANTRA_MANIFEST modules/eye-tracing.md.
+
 **State 15.11.2026, v61:** no floating accessibility button (Marko: "I didn't invite it. Remove that blob"): flagRequestAccessibilityButton removed from claude_control_service.xml, and on connect the service takes its own component out of `accessibility_button_targets` (needs WRITE_SECURE_SETTINGS from `mremote keep`, else skipped).
 
 **State 15.11.2026, v60 (Marko: "if accessibility is not enabled, it needs to put me a link ... as we do on other apps

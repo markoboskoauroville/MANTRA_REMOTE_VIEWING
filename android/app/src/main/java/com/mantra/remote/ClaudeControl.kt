@@ -44,7 +44,7 @@ import kotlin.math.max
  * act on ITSELF. An AccessibilityService dispatches the gestures (tap, swipe, scroll, long-press) on its own glass, and
  * a TYPE_ACCESSIBILITY_OVERLAY layer draws a BIG white mouse pointer that glides to the target before every action, a
  * ripple on a tap, a growing ring on a long-press, an animated trail + arrow + "SCROLL ↓" for a swipe/scroll, and a
- * caption strip at the top in plain words ("Claude: tapping NDI"). The pointer stays while a session is connected and
+ * label riding just above the arrow tip (v62, eye tracing) in plain words ("Claude: tapping NDI"). The pointer stays while a session is connected and
  * fades 5 s after the last command. Whoever watches the phone — the Android viewer, the Mac viewer, scrcpy — sees it,
  * because it is painted on the phone itself.
  *
@@ -194,7 +194,7 @@ class ClaudeControl : AccessibilityService() {
                         "right" -> intArrayOf(cx + amount / 2, cy, cx - amount / 2, cy)
                         else -> intArrayOf(cx, cy + amount / 2, cx, cy - amount / 2)  // down
                     }.let { listOf(it[0], it[1], it[2], it[3]) }
-                    overlay?.caption("Claude: scrolling $dir ${lbl("")}".trim())
+                    overlay?.caption("Claude: scrolling ${mapOf("up" to "↑", "left" to "←", "right" to "→").getOrDefault(dir, "↓")} ${lbl("")}".trim())
                     glideThen(x1, y1) { overlay?.scroll(x1, y1, x2, y2, dir); swipe(x1, y1, x2, y2, 500) }
                     ok(out)
                 }
@@ -367,7 +367,7 @@ private class PointerOverlay(private val service: AccessibilityService) {
     fun ring(x: Int, y: Int, ms: Long) = view.ring(x.toFloat(), y.toFloat(), ms)
     fun trail(x1: Int, y1: Int, x2: Int, y2: Int) = view.trail(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), null)
     fun scroll(x1: Int, y1: Int, x2: Int, y2: Int, dir: String) =
-        view.trail(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), "SCROLL ${arrow(dir)}")
+        view.trail(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), null)   // v62: the words ride above the pointer
     fun caption(text: String) = view.caption(text)
 
     private fun arrow(dir: String) = when (dir) { "up" -> "↑"; "left" -> "←"; "right" -> "→"; else -> "↓" }
@@ -394,7 +394,7 @@ private class OverlayView(private val ctx: android.content.Context) : View(ctx) 
     private val accent = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FF9500") }
     private val accentStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FF9500"); style = Paint.Style.STROKE; strokeWidth = dp(4f); strokeCap = Paint.Cap.ROUND }
     private val capBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#CC000000") }
-    private val capText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = dp(15f); textAlign = Paint.Align.CENTER }
+    private val capText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = dp(19f); textAlign = Paint.Align.CENTER; isFakeBoldText = true }
     private val labelText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FF9500"); textSize = dp(18f); textAlign = Paint.Align.CENTER; isFakeBoldText = true }
 
     private fun now() = SystemClock.uptimeMillis()
@@ -413,15 +413,6 @@ private class OverlayView(private val ctx: android.content.Context) : View(ctx) 
     override fun onDraw(canvas: Canvas) {
         val t = now()
 
-        // caption strip (6 s)
-        if (captionText.isNotEmpty() && t - captionStart < 6000) {
-            val pad = dp(10f); val top = dp(40f)
-            val w = capText.measureText(captionText) + pad * 2
-            val cx = width / 2f
-            canvas.drawRoundRect(cx - w / 2, top, cx + w / 2, top + dp(34f), dp(17f), dp(17f), capBg)
-            canvas.drawText(captionText, cx, top + dp(23f), capText)
-        }
-
         // glide
         if (gliding) {
             val f = ((t - glideStart).toFloat() / glideDur).coerceIn(0f, 1f)
@@ -434,8 +425,11 @@ private class OverlayView(private val ctx: android.content.Context) : View(ctx) 
         if (trailOn) {
             val f = ((t - trailStart).toFloat() / 900f)
             if (f >= 1f) trailOn = false else {
-                val hx = tx1 + (tx2 - tx1) * f.coerceIn(0f, 1f)
-                val hy = ty1 + (ty2 - ty1) * f.coerceIn(0f, 1f)
+                // the head moves with the finger (500 ms), the line fades by 900 ms; v62: the pointer rides the head
+                val hf = ((t - trailStart).toFloat() / 500f).coerceIn(0f, 1f)
+                val hx = tx1 + (tx2 - tx1) * hf
+                val hy = ty1 + (ty2 - ty1) * hf
+                if (!gliding) { px = hx; py = hy }
                 accentStroke.alpha = (200 * (1f - f)).toInt().coerceIn(0, 255)
                 canvas.drawLine(tx1, ty1, hx, hy, accentStroke)
                 // arrow head at the moving end
@@ -473,10 +467,31 @@ private class OverlayView(private val ctx: android.content.Context) : View(ctx) 
         if (lastActivity > 0 && sinceAct < 5600) {
             val alpha = if (sinceAct < 5000) 255 else (255 * (1f - (sinceAct - 5000) / 600f)).toInt().coerceIn(0, 255)
             drawPointer(canvas, px, py, alpha)
+            if (captionText.isNotEmpty()) drawLabel(canvas, captionText, px, py, alpha)
         }
 
         val busy = gliding || trailOn || ringOn || rippleOn || sinceAct < 5600
         if (busy) postInvalidateOnAnimation()
+    }
+
+    /**
+     * v62, EYE TRACING (Marko, 15.11.2026: "If the text is up and the arrow is down, I'm confused. The text should always
+     * be above the arrow. Written when you do the clicking."; MANTRA_MANIFEST modules/eye-tracing.md): the words travel
+     * WITH the pointer in a dark pill, centred on the tip, 24 dp above it, kept inside the screen; only when there is no
+     * room above (the top edge) they sit just under the arrow, still touching it. The eye never jumps.
+     */
+    private fun drawLabel(canvas: Canvas, text: String, x: Float, y: Float, alpha: Int) {
+        val padH = dp(14f); val h = dp(40f); val gap = dp(24f); val edge = dp(8f)
+        val w = (capText.measureText(text) + padH * 2).coerceAtMost(width - edge * 2)
+        var left = x - w / 2
+        left = left.coerceIn(edge, (width - edge - w).coerceAtLeast(edge))
+        var top = y - gap - h
+        if (top < dp(28f)) top = y + dp(48f) * 0.84f + dp(8f)   // no room above: right under the arrow
+        capBg.alpha = (alpha * 0.85f).toInt(); capText.alpha = alpha
+        canvas.drawRoundRect(left, top, left + w, top + h, h / 2, h / 2, capBg)
+        val fm = capText.fontMetrics
+        canvas.drawText(text, left + w / 2, top + h / 2 - (fm.ascent + fm.descent) / 2, capText)
+        capBg.alpha = 255; capText.alpha = 255
     }
 
     /** A classic arrow cursor, ~48 dp tall, white fill with a black outline. Tip at (x,y). */
