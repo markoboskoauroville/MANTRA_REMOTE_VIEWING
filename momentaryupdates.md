@@ -295,3 +295,9 @@ stopped, a tap starts or stops, core rows locked; VMCTL TOKEN pasted once (priva
 
 15.11.2026 (coordinator, after rvctl test taps landed in Marko's live Claude chat on the Pixel; Marko's rule since this morning): no action on his phones unless he said he is watching. rvctl refuses every action without `--watched` ("Ask Marko: are you watching?") and without `--expect <package>` matching the foreground package read from the door right before acting.
 **Status:** saved first. v63: GET /foreground in ClaudeControl; rvctl guard.
+
+## 19.11.2026 (Marko, word for word)
+
+"Now please update my application to have built in server and viewer for VNC inside the app. Update both local remote viewer on my Mac Swift and Kotlin APK Android application and build it on a GitHub and report new versions already."
+Earlier: "The user does not need to install anything in this app to be able to remotely viewing. So if that's VNC, it's open source, you can build in VNC in both application."
+**Status:** saved first. Android part here; the Mac part is in vm-chromium (viewer/).
