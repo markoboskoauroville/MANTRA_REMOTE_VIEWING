@@ -186,21 +186,26 @@ object VncServer {
                 if (minor >= 7) out.writeByte(0) else out.writeInt(0)
                 writeString("Too many wrong passwords: wait a minute"); out.flush(); return false
             }
-            if (minor >= 7) {
-                out.writeByte(1); out.writeByte(2); out.flush()
-                if (inp.readUnsignedByte() != 2) return false
-            } else out.writeInt(2)
-            val challenge = ByteArray(16).also { SecureRandom().nextBytes(it) }
-            out.write(challenge); out.flush()
-            val resp = ByteArray(16); inp.readFully(resp)
             val pw = password
-            if (pw.isEmpty() || !MessageDigest.isEqual(resp, Rfb.vncResponse(pw, challenge))) {
-                failed(ip)
-                note = "$ip: WRONG PASSWORD"
-                out.writeInt(1); if (minor >= 8) writeString("Wrong password"); out.flush(); return false
-            }
-            failures.remove(ip)
-            out.writeInt(0)
+            // v64 (Marko, 19.11.2026: "custom password without any security limitations. It can be even one one
+            // number"): any length; empty = no password at all (security type None)
+            val type = if (pw.isEmpty()) 1 else 2
+            if (minor >= 7) {
+                out.writeByte(1); out.writeByte(type); out.flush()
+                if (inp.readUnsignedByte() != type) return false
+            } else out.writeInt(type)
+            if (type == 2) {
+                val challenge = ByteArray(16).also { SecureRandom().nextBytes(it) }
+                out.write(challenge); out.flush()
+                val resp = ByteArray(16); inp.readFully(resp)
+                if (!MessageDigest.isEqual(resp, Rfb.vncResponse(pw, challenge))) {
+                    failed(ip)
+                    note = "$ip: WRONG PASSWORD"
+                    out.writeInt(1); if (minor >= 8) writeString("Wrong password"); out.flush(); return false
+                }
+                failures.remove(ip)
+                out.writeInt(0)
+            } else if (minor >= 8) out.writeInt(0)   // None: a SecurityResult only in 3.8
             out.flush()
             inp.readUnsignedByte()   // ClientInit: shared or not, every viewer shares
             synchronized(lock) {

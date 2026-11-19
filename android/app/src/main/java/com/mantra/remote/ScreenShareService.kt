@@ -174,11 +174,16 @@ class ScreenShareService : Service() {
             runCatching { c.startService(Intent(c, ScreenShareService::class.java).setAction(ACTION_STOP)) }
         }
 
-        /** The server's VNC password: 8 characters (VNC uses no more), made once, shown in the app, new on demand. */
+        /** The server's VNC password: made once (8 characters), then whatever he writes: any length, a single digit is
+         *  fine, empty = no password (Marko, 19.11.2026). VNC itself reads only the first 8 characters. */
         fun password(c: Context): String {
             val p = c.getSharedPreferences("remote", Context.MODE_PRIVATE)
-            p.getString(PW_KEY, null)?.takeIf { it.length == 8 }?.let { return it }
+            if (p.contains(PW_KEY)) return p.getString(PW_KEY, "") ?: ""
             return newPassword(c)
+        }
+        fun setPassword(c: Context, pw: String) {
+            c.getSharedPreferences("remote", Context.MODE_PRIVATE).edit().putString(PW_KEY, pw).apply()
+            VncServer.password = pw
         }
         fun newPassword(c: Context): String {
             val abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"

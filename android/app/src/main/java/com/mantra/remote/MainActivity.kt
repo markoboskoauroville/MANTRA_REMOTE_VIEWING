@@ -480,7 +480,7 @@ private class Session : Rfb.Listener {
     fun enterVnc(name: String, ip: String, port: Int): Boolean {
         val p = prefs ?: return true
         val target = Tailnet.LinuxVm(name, ip, port, generic = true)
-        if (Secrets.pin(p, Tailnet.vncKey(target)).isEmpty()) { askVnc = target; return false }
+        if (Secrets.pin(p, Tailnet.vncKey(target)).isEmpty() && !p.getBoolean("vnc_nopw:" + ip, false)) { askVnc = target; return false }
         askVnc = null
         if (phase != Phase.SETUP) hangUp()
         phone = null; linux = target; start()
@@ -530,7 +530,7 @@ private class Session : Rfb.Listener {
             val gen = linux?.takeIf { it.generic }
             if (r.startsWith("LOGIN REFUSED") && gen != null) {
                 // v64: a wrong password for a VNC address is forgotten and asked again on the first page
-                Secrets.putPin(prefs, Tailnet.vncKey(gen), "")
+                Secrets.putPin(prefs, Tailnet.vncKey(gen), ""); prefs?.edit()?.remove("vnc_nopw:" + gen.ip)?.apply()
                 status = "LOGIN REFUSED BY ${gen.name}: WRITE ITS VNC PASSWORD AGAIN"
                 askVnc = gen
             } else if (r.startsWith("LOGIN REFUSED")) {
@@ -2231,11 +2231,13 @@ private fun AskVncPassword(prefs: android.content.SharedPreferences, s: Session,
     var pw by remember(target) { mutableStateOf("") }
     Column(Modifier.fillMaxWidth().border(1.dp, Amber).background(BgRaised).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         T("VNC PASSWORD OF ${target.name}", AmberGlow, 14, bold = true)
-        T("${target.ip}:${target.port}. A phone sharing itself shows its password under SHARE THIS PHONE.", Color(0xFFF2DDB4), 13)
+        T("${target.ip}:${target.port}. A phone sharing itself shows its password under SHARE THIS PHONE. Any length.", Color(0xFFF2DDB4), 13)
         Field("PASSWORD (KEPT ENCRYPTED ON THIS PHONE)", pw, secret = true) { pw = it }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Key("SAVE AND ENTER ▶", Modifier.weight(1f), size = 14) {
-                if (pw.isNotEmpty()) { Secrets.putPin(prefs, Tailnet.vncKey(target), pw); s.enterVnc(target.name, target.ip, target.port) }
+            Key(if (pw.isEmpty()) "NO PASSWORD ▶" else "SAVE AND ENTER ▶", Modifier.weight(1f), size = 14) {
+                Secrets.putPin(prefs, Tailnet.vncKey(target), pw)
+                prefs.edit().putBoolean("vnc_nopw:" + target.ip, pw.isEmpty()).apply()
+                s.enterVnc(target.name, target.ip, target.port)
             }
             Key("CANCEL", Modifier.weight(0.5f), size = 14) { s.askVnc = null }
         }
@@ -2303,9 +2305,20 @@ private fun ShareThisPhone() {
         if (on) {
             val addrs = remember(on) { ScreenShareService.addresses() }
             T("PORT ${VncServer.PORT} ON " + addrs.joinToString("  ·  ").ifEmpty { "NO NETWORK" }, Cyan, 13)
-            T("PASSWORD  $pw", AmberGlow, 18, bold = true)
+            T(if (pw.isEmpty()) "NO PASSWORD: ANYONE WHO REACHES PORT ${VncServer.PORT} SEES THIS PHONE" else "PASSWORD  $pw",
+                if (pw.isEmpty()) RedAlert else AmberGlow, 18, bold = true)
             T("VIEWERS  ${VncServer.clients}" + (if (VncServer.note.isNotEmpty()) "  ·  " + VncServer.note else ""), Amber, 13)
-            Key("NEW PASSWORD", Modifier.fillMaxWidth(), size = 13) { pw = ScreenShareService.newPassword(ctx) }
+        }
+        // v64 (Marko, 19.11.2026: "custom password without any security limitations. It can be even one one number")
+        var edit by remember { mutableStateOf(pw) }
+        var saved by remember { mutableStateOf(false) }
+        Field("PASSWORD (ANY LENGTH, ONE DIGIT IS FINE, EMPTY = NONE)", edit) { edit = it; saved = false }
+        if (edit.length > 8) T("VNC reads only the first 8 characters: ${edit.take(8)}", AmberDim, 12)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Key(if (saved) "SAVED" else "SAVE PASSWORD", Modifier.weight(1f), active = saved, size = 13) {
+                ScreenShareService.setPassword(ctx, edit); pw = edit; saved = true
+            }
+            Key("NEW RANDOM", Modifier.weight(1f), size = 13) { pw = ScreenShareService.newPassword(ctx); edit = pw; saved = true }
         } else T("Any VNC viewer sees and drives this phone: another phone with this app, the Mac app, any VNC viewer. Nothing to install.", Color(0xFFF2DDB4), 13)
         if (input) T("INPUT: viewers tap, swipe and type through Claude Control.", GreenOk, 12)
         else T("VIEW ONLY: viewers see the screen but cannot touch it until Claude Control is on (the card above).", AmberGlow, 12)
