@@ -301,3 +301,6 @@ stopped, a tap starts or stops, core rows locked; VMCTL TOKEN pasted once (priva
 "Now please update my application to have built in server and viewer for VNC inside the app. Update both local remote viewer on my Mac Swift and Kotlin APK Android application and build it on a GitHub and report new versions already."
 Earlier: "The user does not need to install anything in this app to be able to remotely viewing. So if that's VNC, it's open source, you can build in VNC in both application."
 **Status:** saved first. Android part here; the Mac part is in vm-chromium (viewer/).
+
+19.11.2026, Marko (word for word): "Next update is that in my remote viewing application for VNC, I need to have also custom password without any security limitations. It can be even one one number."
+**Status:** saved first. The server's password is his to write (any length, one digit is fine, no rules); empty = no password (RFB security None).
