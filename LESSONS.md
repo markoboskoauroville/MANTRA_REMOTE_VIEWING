@@ -103,3 +103,15 @@ v41 made L/R hold the button down; Marko meant that while L is lit every tap is 
 - v60: `android.settings.ACCESSIBILITY_DETAILS_SETTINGS` is refused to an ordinary app on the Pixel (Android 17), so the
   fallback runs: ACTION_ACCESSIBILITY_SETTINGS + `:settings:fragment_args_key` = the component (in the intent AND in a
   `:settings:show_fragment_args` bundle) opens the list with our row highlighted. Seen 15.11.2026.
+
+## 19.11.2026: the built-in VNC server (v64-v66)
+- Android 14+: startForeground(type MEDIA_PROJECTION) BEFORE getMediaProjection, registerCallback BEFORE createVirtualDisplay; the
+  consent token is single use. createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay()) skips "single app".
+- A VirtualDisplay only produces frames on change: never drop an ImageReader frame by throttling; post a delayed acquireLatestImage
+  instead, or a newly connected viewer waits for a change that never comes.
+- On the Pixel_7_API_35 emulator a running MediaProjection makes SurfaceFlinger captures (adb screencap AND the projection) show app
+  layers black, while the emulator window shows them; `adb emu screenrecord screenshot <dir>` gives the real host-side picture.
+- uiautomator taps by text must match EXACTLY and check position: "OK" matched MACBOOK-PRO and a later "ENTER ▶" was a machine row;
+  both times the emulator app dialled Marko's Mac Screen Sharing (via 10.0.2.2) and was refused. Pick nodes by exact text AND region.
+- Reinstalling the APK left Claude Control "crashed" (bound but no gestures, /key home did nothing): switch the service off and on.
+- A generic VNC target must not require Tailscale (home Wi-Fi, loopback): v66.

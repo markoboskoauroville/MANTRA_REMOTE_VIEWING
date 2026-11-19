@@ -1,5 +1,32 @@
 # TAKEOVER: Mantra Remote Viewing (Android)
 
+**State 19.11.2026, v64 → v66 (Marko: "built in server and viewer for VNC inside the app ... The user does not need to install anything"; then "custom password without any security limitations. It can be even one one number"):**
+- **Built-in VNC server** (`VncServer.kt`, `ScreenShareService.kt`, pure Kotlin): first page card SHARE THIS PHONE (VNC). On → Android's
+  consent "Start recording or casting with Mantra Remote Viewing?" (Entire screen forced by MediaProjectionConfig.createConfigForDefaultDisplay)
+  → foreground service type mediaProjection (notification with STOP) → VirtualDisplay → ImageReader RGBA → RFB 3.8 (3.3/3.7 too) on
+  **0.0.0.0:5900**. Encodings ZRLE (solid + palette tiles, zlib) and Raw; any true-colour pixel format; only changed 64x64 tiles sent;
+  DesktopSize when the phone turns (virtual display resized). Security: VNC password (type 2) or, with an EMPTY password, None (type 1).
+  Password: random 8 chars at first, then whatever Marko types in the card (any length, "1" works; VNC reads the first 8). 5 wrong
+  passwords block that address for 60 s. The card shows PORT 5900 ON <Tailscale 100.x first, then Wi-Fi>, the password, viewers.
+  No username anywhere (VNC auth is password only).
+- **Input** from viewers through Claude Control (ClaudeControl companion `remote*`): click = tap (ripple), held click ≥500 ms = long
+  press, drag = swipe, right button = BACK, wheel = scroll, Esc = BACK, Home = HOME, Menu/F1 = RECENTS, Backspace/Return/typed
+  characters into the focused field. Claude Control off → VIEW ONLY, said on the card.
+- **Built-in viewer**: the existing Rfb client. Tailnet.Place has `vnc` (5900 answers) and `own` (its adb port answers); a phone that
+  shares itself gets a "VNC ▶ <name>" button (or its row says VNC ▶ when only 5900 answers). ANY VNC SERVER ▼ on the first page: host or
+  host:port, any RFB server. Password asked once per address (AskVncPassword, Secrets encrypted; NO PASSWORD ▶ for None servers),
+  forgotten and asked again on LOGIN REFUSED. Generic targets ride `Tailnet.LinuxVm(generic = true)`: no vmctl SERVICES, no name lookup,
+  no Tailscale needed (v66).
+- **Tested 19.11.2026 on Pixel_7_API_35** (releases v64/v65/v66 installed by adb): Python RFB client over adb forward: password "1"
+  accepted, "2" refused ("Wrong password"), ZRLE frame 1080x2400 decoded (~7 kB for a mostly black screen), Raw frame 10.4 MB, incremental
+  updates only on change; VNC Home key → launcher in front; VNC click on the app's VIEW key → VIEW lit; the app's own viewer entered
+  127.0.0.1:5900 with "1" and showed the shared phone; server kept serving with the app in the background and after screen off/on.
+  **Gap**: on the emulator SurfaceFlinger capture (adb screencap too) shows app layers black while a projection runs (the emulator's
+  real screen is fine): the pixels match screencap exactly, but the full picture must be seen on a real phone. Not tried on Marko's phones.
+- **Marko on each phone**: let it update at start (v66) → SHARE THIS PHONE (VNC) → "Start" on Android's screen-capture question (Entire
+  screen) → read PORT/PASSWORD on the card (or type his own) → for touch from the viewer, Claude Control on (the amber card). Each start
+  of sharing asks the consent again (Android's rule).
+
 **State 15.11.2026, v63 (the guard, after rvctl test taps landed in Marko's live Claude chat):** ClaudeControl answers `GET /foreground` (package in front + windows). rvctl refuses every action (tap, longpress, swipe, scroll, text, key) without `--watched` ("Ask Marko: are you watching?", checked before any phone is touched) and without `--expect <package>`, and reads /foreground right before acting: a mismatch is refused, nothing done. `rvctl emu ...` = the Pixel_7_API_35 emulator for tests. Never test-tap Marko's phones.
 
 **State 15.11.2026, v62 (eye tracing, Marko: "The text should always be above the arrow. Written when you do the clicking."):** the caption strip at the top is gone; the label rides WITH the pointer in a dark pill (19 dp bold), centred on the tip, 24 dp above it, clamped inside the screen, just under the arrow only when there is no room above. During a swipe/scroll the pointer rides the trail head, so the words stay over the moving arrow (`drawLabel` in ClaudeControl.kt). Rule: MANTRA_MANIFEST modules/eye-tracing.md.
