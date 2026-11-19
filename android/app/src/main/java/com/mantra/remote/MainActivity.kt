@@ -423,7 +423,8 @@ private class Session : Rfb.Listener {
             val tsUp = Tailscale.ensure(c) { if (gen == attempt) status = it }
             tailscaleDown = if (tsUp) "" else Tailscale.whyDown(c)
             if (gen != attempt || !wanted) return@Thread
-            if (!tsUp) { phase = Phase.SETUP; statusBad = true; status = tailscaleDown; return@Thread }
+            // v66: a VNC address (home Wi-Fi, this phone itself) needs no Tailscale; only the VM does
+            if (!tsUp && !vm.generic) { phase = Phase.SETUP; statusBad = true; status = tailscaleDown; return@Thread }
             // v23: its address looked up again on every ENTER
             status = "> TAILSCALE: LOOKING UP ${vm.name}"
             // v64: a VNC server entered by its address (a phone sharing itself, a typed address) is dialled as it is
