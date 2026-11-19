@@ -2308,8 +2308,8 @@ private fun ShareThisPhone() {
             T(if (pw.isEmpty()) "NO PASSWORD: ANYONE WHO REACHES PORT ${VncServer.PORT} SEES THIS PHONE" else "PASSWORD  $pw",
                 if (pw.isEmpty()) RedAlert else AmberGlow, 18, bold = true)
             T("VIEWERS  ${VncServer.clients}" + (if (VncServer.note.isNotEmpty()) "  ·  " + VncServer.note else ""), Amber, 13)
-        }
-        // v64 (Marko, 19.11.2026: "custom password without any security limitations. It can be even one one number")
+        } else T("Any VNC viewer sees and drives this phone: another phone with this app, the Mac app, any VNC viewer. Nothing to install.", Color(0xFFF2DDB4), 13)
+        // v65 (Marko, 19.11.2026: "custom password without any security limitations. It can be even one one number")
         var edit by remember { mutableStateOf(pw) }
         var saved by remember { mutableStateOf(false) }
         Field("PASSWORD (ANY LENGTH, ONE DIGIT IS FINE, EMPTY = NONE)", edit) { edit = it; saved = false }
@@ -2319,7 +2319,7 @@ private fun ShareThisPhone() {
                 ScreenShareService.setPassword(ctx, edit); pw = edit; saved = true
             }
             Key("NEW RANDOM", Modifier.weight(1f), size = 13) { pw = ScreenShareService.newPassword(ctx); edit = pw; saved = true }
-        } else T("Any VNC viewer sees and drives this phone: another phone with this app, the Mac app, any VNC viewer. Nothing to install.", Color(0xFFF2DDB4), 13)
+        }
         if (input) T("INPUT: viewers tap, swipe and type through Claude Control.", GreenOk, 12)
         else T("VIEW ONLY: viewers see the screen but cannot touch it until Claude Control is on (the card above).", AmberGlow, 12)
         if (note.isNotEmpty()) T("> $note", RedAlert, 13)
