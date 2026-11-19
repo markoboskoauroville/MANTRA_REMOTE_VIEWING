@@ -27,10 +27,14 @@ import java.util.concurrent.TimeUnit
  */
 object Tailnet {
     enum class Kind { MAC, PHONE, LINUX, OTHER }
-    data class Place(val name: String, val ip: String, val os: String, val kind: Kind, val online: Boolean)
+    /** v64: [vnc] = something answers on 5900 (a phone sharing itself with this app's server, a Mac, any VNC server). */
+    /** [own] = its own port answered (adb 5555 for a phone); [online] = that or VNC. */
+    data class Place(val name: String, val ip: String, val os: String, val kind: Kind, val online: Boolean, val vnc: Boolean = false, val own: Boolean = online)
 
     /** v21: a Linux machine with a VNC server this app can enter (TigerVNC, VNC password, Tailscale only). */
-    data class LinuxVm(val name: String, val ip: String, val port: Int)
+    /** v64: [generic] = any VNC server entered by its address (a phone sharing itself, a typed address): no vmctl,
+     *  no address lookup by name. */
+    data class LinuxVm(val name: String, val ip: String, val port: Int, val generic: Boolean = false)
     val LINUX_VMS = listOf(LinuxVm("CHROMIUM-VM", "100.102.86.30", 5901))
     /** v23: matched by address or by name, so a VM whose Tailscale address changed is still the same VM. */
     fun linuxVm(ip: String, name: String = "") = LINUX_VMS.firstOrNull { it.ip == ip || it.name.equals(name, ignoreCase = true) }
@@ -128,7 +132,13 @@ object Tailnet {
                 val k = kindOf(os)
                 // v21: a Linux machine with VNC answers on its VNC port (chromium-vm: 5901), else on ssh
                 val up = linuxVm(ip, name)?.let { answers(ip, it.port) } ?: answers(ip, port(k))
-                Place(name.uppercase(), ip, os, k, up)
+                // v64: a phone (or any machine but the VM) that answers on 5900 can be viewed by VNC too
+                val vnc = when {
+                    k == Kind.MAC -> up
+                    linuxVm(ip, name) != null -> false
+                    else -> answers(ip, VncServer.PORT)
+                }
+                Place(name.uppercase(), ip, os, k, up || vnc, vnc, up)
             }
         }.mapNotNull { runCatching { it.get(5, TimeUnit.SECONDS) }.getOrNull() }
         pool.shutdownNow()

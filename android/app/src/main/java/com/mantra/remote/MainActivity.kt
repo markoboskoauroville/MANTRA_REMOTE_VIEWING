@@ -426,14 +426,15 @@ private class Session : Rfb.Listener {
             if (!tsUp) { phase = Phase.SETUP; statusBad = true; status = tailscaleDown; return@Thread }
             // v23: its address looked up again on every ENTER
             status = "> TAILSCALE: LOOKING UP ${vm.name}"
-            val ip = Tailnet.vmAddress(c, p, vm)
+            // v64: a VNC server entered by its address (a phone sharing itself, a typed address) is dialled as it is
+            val ip = if (vm.generic) vm.ip else Tailnet.vmAddress(c, p, vm)
             if (gen != attempt || !wanted) return@Thread
             host = ip
             status = "> DIAL ${vm.name} $ip:${vm.port}"
             android.util.Log.i("MantraRemote", "dialling ${vm.name} at $ip:${vm.port}")
             dial = { colours ->
                 rfb?.let { old -> old.close(); baseRx += old.rxBytes.get(); baseTx += old.txBytes.get() }
-                val r = Rfb(this, colours, extendedSize = true); rfb = r
+                val r = Rfb(this, colours, extendedSize = !vm.generic); rfb = r
                 r.connect(ip, vm.port, password)
             }
             main.post { if (gen == attempt && wanted) dial(coloursSaved(p)) }
@@ -467,6 +468,22 @@ private class Session : Rfb.Listener {
             }
             else -> status = "${pl.name}: ENTERING THIS MACHINE COMES IN A NEXT VERSION"
         }
+        return true
+    }
+
+    /**
+     * v64: any VNC server by its address: a phone sharing itself with this app (SHARE THIS PHONE), the Mac app's own
+     * server, a Mac's Screen Sharing (VNC password), anything RFB. False when its password is not saved yet: the first
+     * page then asks for it ([askVnc]).
+     */
+    var askVnc by mutableStateOf<Tailnet.LinuxVm?>(null)
+    fun enterVnc(name: String, ip: String, port: Int): Boolean {
+        val p = prefs ?: return true
+        val target = Tailnet.LinuxVm(name, ip, port, generic = true)
+        if (Secrets.pin(p, Tailnet.vncKey(target)).isEmpty()) { askVnc = target; return false }
+        askVnc = null
+        if (phase != Phase.SETUP) hangUp()
+        phone = null; linux = target; start()
         return true
     }
 
@@ -510,7 +527,13 @@ private class Session : Rfb.Listener {
         if (r.startsWith("LOGIN REFUSED") || r.startsWith("REFUSED") || r.startsWith("NO VNC PASSWORD") || r.startsWith("NOT A VNC SERVER")) {
             wanted = false; attempt++
             app?.let { LinkService.stop(it) }
-            if (r.startsWith("LOGIN REFUSED")) {
+            val gen = linux?.takeIf { it.generic }
+            if (r.startsWith("LOGIN REFUSED") && gen != null) {
+                // v64: a wrong password for a VNC address is forgotten and asked again on the first page
+                Secrets.putPin(prefs, Tailnet.vncKey(gen), "")
+                status = "LOGIN REFUSED BY ${gen.name}: WRITE ITS VNC PASSWORD AGAIN"
+                askVnc = gen
+            } else if (r.startsWith("LOGIN REFUSED")) {
                 status = "LOGIN REFUSED: CHECK THE ${linux?.name ?: "MAC"} PASSWORD UNDER SETTINGS, THEN ENTER AGAIN"
                 openSettings = true
             }
@@ -750,6 +773,7 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
             Key("✕", Modifier.width(60.dp), size = 22) { activity?.finish() }   // closes the app: link, service (Tailscale stays on, v32)
         }
         ClaudeControlPrompt()   // v60: the accessibility link, only while Claude Control is off
+        ShareThisPhone()        // v64: the built-in VNC server
         T("── MY MACHINES ─────────────────", Rule, 16)
         val list = online
         if (s.tailscaleDown.isNotEmpty()) {
@@ -766,9 +790,19 @@ private fun Setup(prefs: android.content.SharedPreferences, s: Session) {
                     if (!s.enter(pl)) settings = true
                 }
                 !pl.online -> looking++
+                // v64: reachable only by VNC (a phone sharing itself, no adb): the built-in viewer
+                pl.vnc && !pl.own -> s.enterVnc(pl.name, pl.ip, VncServer.PORT)
                 else -> s.enter(pl)
             }
-        } }
+        }
+            // v64: a phone (or other machine) that also shares itself by VNC: a second way in, the built-in viewer
+            if (pl.vnc && pl.own && pl.kind != Tailnet.Kind.MAC && Tailnet.linuxVm(pl) == null)
+                Key("VNC ▶  ${pl.name}  (BUILT-IN VIEWER, PORT ${VncServer.PORT})", Modifier.fillMaxWidth(), size = 13) {
+                    s.enterVnc(pl.name, pl.ip, VncServer.PORT)
+                }
+        }
+        s.askVnc?.let { target -> AskVncPassword(prefs, s, target) }
+        AnyVncServer(prefs, s)
         Key("↻ LOOK AGAIN", Modifier.fillMaxWidth(), size = 14) { looking++ }
         if (s.status.isNotEmpty()) T("> " + s.status, if (s.statusBad) RedAlert else GreenOk, 14)
         Spacer(Modifier.height(8.dp))
@@ -795,6 +829,7 @@ private fun Machine(pl: Tailnet.Place, busy: Boolean, onClick: () -> Unit) {
             busy && (pl.kind == Tailnet.Kind.MAC || Tailnet.linuxVm(pl) != null) -> "…"
             !pl.online && (pl.kind == Tailnet.Kind.MAC || Tailnet.linuxVm(pl) != null) -> "OFFLINE · TRY ▶"
             !pl.online -> "OFFLINE"
+            pl.vnc && !pl.own -> "VNC ▶"
             pl.kind == Tailnet.Kind.MAC || pl.kind == Tailnet.Kind.PHONE || Tailnet.linuxVm(pl) != null -> "ENTER ▶"
             else -> "SOON"
         }, ink, 15, bold = true)
@@ -1696,7 +1731,7 @@ private fun Live(s: Session) {
             }
             // v51 (Marko, 14.11.2026: "on the gear icon I will have each program and we now call the program services"):
             // on the VM, its services (vmctl): one row each, a tap starts or stops it; core rows locked
-            s.linux?.let { vm ->
+            s.linux?.takeIf { !it.generic }?.let { vm ->
                 Key("SERVICES", Modifier.fillMaxWidth(), size = 14, sub = "START · STOP ON ${vm.name}") { servicesOpen = true }
             }
             // in ⚙ every number starts at the left edge, padded on its right, so the units stand in one column (Marko, 26.10.2026)
@@ -1770,7 +1805,7 @@ private fun Live(s: Session) {
         }
     }
 
-    if (servicesOpen) s.linux?.let { vm ->
+    if (servicesOpen) s.linux?.takeIf { !it.generic }?.let { vm ->
         Dialog(onDismissRequest = { servicesOpen = false }) { ServicesPanel(vm.ip, vm.name, s.prefs) { servicesOpen = false } }
     }
 
@@ -2187,4 +2222,93 @@ private fun openClaudeControlSettings(c: Context) {
         .putExtra(":settings:show_fragment_args", args)
         .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
     if (runCatching { c.startActivity(details) }.isFailure) runCatching { c.startActivity(list) }
+}
+
+
+/** v64: the password of a VNC address, asked once on the first page, kept encrypted (Secrets), then entered. */
+@Composable
+private fun AskVncPassword(prefs: android.content.SharedPreferences, s: Session, target: Tailnet.LinuxVm) {
+    var pw by remember(target) { mutableStateOf("") }
+    Column(Modifier.fillMaxWidth().border(1.dp, Amber).background(BgRaised).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        T("VNC PASSWORD OF ${target.name}", AmberGlow, 14, bold = true)
+        T("${target.ip}:${target.port}. A phone sharing itself shows its password under SHARE THIS PHONE.", Color(0xFFF2DDB4), 13)
+        Field("PASSWORD (KEPT ENCRYPTED ON THIS PHONE)", pw, secret = true) { pw = it }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Key("SAVE AND ENTER ▶", Modifier.weight(1f), size = 14) {
+                if (pw.isNotEmpty()) { Secrets.putPin(prefs, Tailnet.vncKey(target), pw); s.enterVnc(target.name, target.ip, target.port) }
+            }
+            Key("CANCEL", Modifier.weight(0.5f), size = 14) { s.askVnc = null }
+        }
+    }
+}
+
+/** v64: any VNC server on the tailnet or the Wi-Fi by its address (host or host:port, 5900 when none). */
+@Composable
+private fun AnyVncServer(prefs: android.content.SharedPreferences, s: Session) {
+    var open by remember { mutableStateOf(false) }
+    Key(if (open) "ANY VNC SERVER ▲" else "ANY VNC SERVER ▼", Modifier.fillMaxWidth(), size = 14) { open = !open }
+    if (!open) return
+    var addr by remember { mutableStateOf(prefs.getString("vnc_any", "") ?: "") }
+    T("A Mac with Screen Sharing, a phone sharing itself, the Mac app's server, any RFB server. Nothing to install.", AmberDim, 12)
+    Field("ADDRESS (HOST OR HOST:PORT)", addr) { addr = it.trim() }
+    Key("ENTER ▶", Modifier.fillMaxWidth(), size = 14) {
+        val host = addr.substringBeforeLast(':').takeIf { addr.contains(':') && addr.substringAfterLast(':').all(Char::isDigit) } ?: addr
+        val port = if (host != addr) addr.substringAfterLast(':').toIntOrNull() ?: 5900 else 5900
+        if (host.isNotEmpty()) {
+            prefs.edit().putString("vnc_any", addr).apply()
+            s.enterVnc(host.uppercase(), host, port)
+        }
+    }
+}
+
+/**
+ * v64 (Marko, 19.11.2026: "built in server and viewer for VNC inside the app"): SHARE THIS PHONE (VNC). On: Android asks
+ * once to record the entire screen, then the phone is served on port 5900 to any VNC viewer (another phone with this
+ * app, the Mac app, any VNC viewer). The password is shown here; input goes through Claude Control, else view only.
+ */
+@Composable
+private fun ShareThisPhone() {
+    val ctx = LocalContext.current
+    var note by remember { mutableStateOf("") }
+    var pw by remember { mutableStateOf(ScreenShareService.password(ctx)) }
+    var input by remember { mutableStateOf(claudeControlEnabled(ctx)) }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) input = claudeControlEnabled(ctx)
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { res ->
+        val data = res.data
+        if (res.resultCode == android.app.Activity.RESULT_OK && data != null) { ScreenShareService.start(ctx, res.resultCode, data); note = "" }
+        else note = "ANDROID WAS NOT ALLOWED TO SHARE THE SCREEN"
+    }
+    val on = VncServer.on
+    Column(
+        Modifier.fillMaxWidth().border(1.dp, if (on) GreenOk else Rule).background(BgRaised).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Key(if (on) "SHARE THIS PHONE (VNC): ON" else "SHARE THIS PHONE (VNC): OFF", Modifier.fillMaxWidth(), active = on, size = 15) {
+            if (on) ScreenShareService.stop(ctx)
+            else {
+                val mpm = ctx.getSystemService(android.media.projection.MediaProjectionManager::class.java)
+                // the whole screen, never a single app (Android 14+ would offer that choice)
+                launcher.launch(mpm.createScreenCaptureIntent(android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay()))
+            }
+        }
+        if (on) {
+            val addrs = remember(on) { ScreenShareService.addresses() }
+            T("PORT ${VncServer.PORT} ON " + addrs.joinToString("  ·  ").ifEmpty { "NO NETWORK" }, Cyan, 13)
+            T("PASSWORD  $pw", AmberGlow, 18, bold = true)
+            T("VIEWERS  ${VncServer.clients}" + (if (VncServer.note.isNotEmpty()) "  ·  " + VncServer.note else ""), Amber, 13)
+            Key("NEW PASSWORD", Modifier.fillMaxWidth(), size = 13) { pw = ScreenShareService.newPassword(ctx) }
+        } else T("Any VNC viewer sees and drives this phone: another phone with this app, the Mac app, any VNC viewer. Nothing to install.", Color(0xFFF2DDB4), 13)
+        if (input) T("INPUT: viewers tap, swipe and type through Claude Control.", GreenOk, 12)
+        else T("VIEW ONLY: viewers see the screen but cannot touch it until Claude Control is on (the card above).", AmberGlow, 12)
+        if (note.isNotEmpty()) T("> $note", RedAlert, 13)
+    }
 }

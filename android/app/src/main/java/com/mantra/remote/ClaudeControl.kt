@@ -70,6 +70,31 @@ class ClaudeControl : AccessibilityService() {
         const val PORT = 8790
         @Volatile private var instance: ClaudeControl? = null
         fun isUp() = instance != null
+
+        // v64: input from a viewer of the built-in VNC server (VncServer). No glide (it would lag behind the viewer's
+        // own mouse), a ripple where a tap lands. Called off the main thread: the gestures wait for their callback.
+        fun remoteTap(x: Int, y: Int) {
+            val s = instance ?: return
+            s.main.post { s.overlay?.ripple(x, y) }
+            s.tap(x, y)
+        }
+        fun remoteLongPress(x: Int, y: Int, ms: Int) { instance?.longPress(x, y, ms) }
+        fun remoteSwipe(x1: Int, y1: Int, x2: Int, y2: Int, ms: Int) { instance?.swipe(x1, y1, x2, y2, ms) }
+        fun remoteGlobal(action: Int) { instance?.performGlobalAction(action) }
+        fun remoteText(t: String) { instance?.typeText(t) }
+        fun remoteBackspace() {
+            val s = instance ?: return
+            val node = s.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return
+            if (!node.isEditable) return
+            val text = node.text?.toString() ?: return
+            val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text.dropLast(1)) }
+            node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        }
+        fun remoteEnter() {
+            val s = instance ?: return
+            val node = s.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return
+            node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+        }
     }
 
     private val main = Handler(Looper.getMainLooper())

@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- v64: SHARE THIS PHONE (VNC): the screen captured by MediaProjection -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- v30 keep debugging: granted once from the Mac (`phones keep`), never asked of the user -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
@@ -45,6 +47,11 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Holds an open remote-desktop (VNC) connection to the user's own computer while the app is in the background." />
         </service>
+        <!-- v64: the built-in VNC server (port 5900): the screen by MediaProjection, served by VncServer -->
+        <service
+            android:name=".ScreenShareService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
         <!-- v30: keeps USB and wireless debugging on, and adb on 5555 -->
         <service
             android:name=".KeeperService"
