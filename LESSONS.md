@@ -115,3 +115,9 @@ v41 made L/R hold the button down; Marko meant that while L is lit every tap is 
   both times the emulator app dialled Marko's Mac Screen Sharing (via 10.0.2.2) and was refused. Pick nodes by exact text AND region.
 - Reinstalling the APK left Claude Control "crashed" (bound but no gestures, /key home did nothing): switch the service off and on.
 - A generic VNC target must not require Tailscale (home Wi-Fi, loopback): v66.
+
+- **v67: Tailscale could not be switched off** (24.11.2026). Symptom: toggle off in the Tailscale app, "Not connected" for
+  20-60 s, then connected again, always at :25 of a minute. Cause: `DebugKeeper.check()` (every 60 s, KeeperService)
+  sent `com.tailscale.ipn.CONNECT_VPN` whenever no 100.x interface was up (v34 "Tailscale back after a restart").
+  Found with `adb shell dumpsys activity broadcasts | grep -B3 -A6 CONNECT_VPN` -> `caller=com.mantra.remote`.
+  Fix: the keeper no longer touches Tailscale; Tailscale restores its own state after a restart.

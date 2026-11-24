@@ -70,8 +70,9 @@ object DebugKeeper {
         } else if (!usb || !wifi) {
             remind(c); return@thread
         }
-        // v34: Tailscale back after a restart (also set as the always-on VPN by mremote keep)
-        if (!tailscaleUp()) runCatching { Tailscale.on(c) }
+        // v67: NO Tailscale switching here. v34 sent CONNECT_VPN whenever the tunnel was down, and this runs every
+        // 60 s, so Marko could never disconnect Tailscale (it came back at :25 of every minute). Tailscale starts
+        // itself after a restart with its own saved on/off state; an "off" must stay off.
         if (!port5555()) restore5555(c)
     }
 
