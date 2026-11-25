@@ -11,4 +11,4 @@ Then, from `site/public` (the token and account from ~/Downloads/API/Cloudflare.
     npx --yes wrangler@3 pages project create mantraremote --production-branch main
     npx --yes wrangler@3 pages deploy . --project-name mantraremote --branch main --commit-dirty=true
 
-and the card on markobosko.pages.dev #/kod (product-pages-on-the-bio.md).
+and the card on markobosko.org #/kod (product-pages-on-the-bio.md).
